@@ -1,0 +1,7 @@
+db:
+  host: "yaml-host-config-success"
+  port: "5433"
+  user: "yaml-user"
+  password: "yaml-password"
+  name: "yaml-db"
+  sslmode: "require"

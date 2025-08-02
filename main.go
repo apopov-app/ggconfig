@@ -27,8 +27,8 @@ type InterfaceInfo struct {
 }
 
 func main() {
-	interfaceName := flag.String("interface", "Config", "interface name")
-	outputPath := flag.String("output", "internal/configs", "output directory path")
+	interfaceName := flag.String("interface", "", "interface name")
+	outputPath := flag.String("output", "", "output directory path")
 	examplePath := flag.String("example", "", "generate example config file")
 	flag.Parse()
 
@@ -41,6 +41,9 @@ func main() {
 	packageName := filepath.Base(currentDir)
 	fmt.Printf("Auto-detected package: %s\n", packageName)
 
+	if interfaceName == nil || *interfaceName == "" {
+		log.Fatalf("interface name is required")
+	}
 	fmt.Printf("Generating config for package: %s, interface: %s\n", packageName, *interfaceName)
 
 	// Парсим интерфейс
@@ -66,12 +69,15 @@ func main() {
 		}
 	}
 
-	fmt.Printf("✅ Generated config for %s.%s in %s\n", info.PackageName, info.InterfaceName, *outputPath)
+	outputDisplayPath := *outputPath
+	if outputDisplayPath == "" {
+		outputDisplayPath = "current package"
+	}
+	fmt.Printf("✅ Generated config for %s.%s in %s\n", info.PackageName, info.InterfaceName, outputDisplayPath)
 }
 
 func parseInterface(packageName, interfaceName string) (*InterfaceInfo, error) {
 	// Парсим весь пакет - путь относительно папки с директивой
-	// Нужно подняться на один уровень вверх от internal/database или internal/server
 	packagePath := filepath.Join("..", packageName)
 
 	fmt.Printf("Parsing package: %s\n", packagePath)
@@ -183,7 +189,7 @@ func generateImplementation(info *InterfaceInfo, outputPath string) error {
 	var packageName string
 	var isSamePackage bool
 
-	if outputPath == "internal/configs" {
+	if outputPath == "" {
 		// По умолчанию - создаем в текущем пакете
 		fullOutputPath = "."
 		packageName = info.PackageName
@@ -244,7 +250,7 @@ func generateImplementation(info *InterfaceInfo, outputPath string) error {
 		PackageName:    info.PackageName,
 		InterfaceName:  info.InterfaceName,
 		Methods:        info.Methods,
-		ImportPath:     fmt.Sprintf("github.com/apopov-app/ggconfig/internal/%s", info.PackageName),
+		ImportPath:     fmt.Sprintf("github.com/apopov-app/ggconfig/example2/internal/%s", info.PackageName),
 		GenPackageName: packageName,
 		IsSamePackage:  isSamePackage,
 	}
@@ -253,9 +259,17 @@ func generateImplementation(info *InterfaceInfo, outputPath string) error {
 }
 
 func generateExampleConfig(info *InterfaceInfo, examplePath string) error {
-	// Создаем директорию если не существует - путь относительно корня проекта
-	// Нужно подняться на два уровня вверх от internal/database или internal/server
-	fullOutputPath := filepath.Join("..", "..", examplePath)
+	// Создаем директорию если не существует
+	var fullOutputPath string
+	if examplePath == "" {
+		// По умолчанию - создаем в текущем пакете
+		fullOutputPath = "."
+	} else {
+		// Пользователь указал свой путь - путь относительно корня проекта
+		// Нужно подняться на два уровня вверх от internal/database или internal/server
+		fullOutputPath = filepath.Join("..", "..", examplePath)
+	}
+
 	if err := os.MkdirAll(fullOutputPath, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -357,7 +371,7 @@ func (c *{{$.PackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.R
 }
 {{end}}
 
-func NewConfig{{.PackageName | title}}() {{if .IsSamePackage}}{{.InterfaceName}}{{else}}{{.PackageName}}.{{.InterfaceName}}{{end}} {
+func NewConfig{{.PackageName | title}}() {{.PackageName}}.{{.InterfaceName}} {
 	return &{{.PackageName}}EnvConfig{}
 }
 
@@ -367,7 +381,7 @@ type {{.PackageName}}YAMLConfig struct {
 	data []byte
 }
 
-func NewYAMLConfig(data []byte) {{if .IsSamePackage}}{{.InterfaceName}}{{else}}{{.PackageName}}.{{.InterfaceName}}{{end}} {
+func NewYAMLConfig(data []byte) {{.PackageName}}.{{.InterfaceName}} {
 	return &{{.PackageName}}YAMLConfig{
 		data: data,
 	}
@@ -401,7 +415,7 @@ func (c *{{$.PackageName}}MockConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.
 }
 {{end}}
 
-func NewMock{{.PackageName | title}}() {{if .IsSamePackage}}{{.InterfaceName}}{{else}}{{.PackageName}}.{{.InterfaceName}}{{end}} {
+func NewMock{{.PackageName | title}}() {{.PackageName}}.{{.InterfaceName}} {
 	return &{{.PackageName}}MockConfig{}
 }
 `
