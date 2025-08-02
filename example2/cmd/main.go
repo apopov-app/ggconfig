@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	yamlData, err := os.ReadFile("config.yaml")
+	yamlData, err := os.ReadFile("../config.yaml")
 	if err != nil {
 		log.Fatalf("Failed to read YAML config: %v", err)
 	}

@@ -12,7 +12,7 @@ func main() {
 
 	// Пример 1: Использование ENV конфигурации
 	log.Println("\n=== ENV Configuration ===")
-	envConfig := db.NewConfigDb()
+	envConfig := db.NewConfigDbConfig()
 	dbConn, err := db.NewConnection(envConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -44,7 +44,7 @@ func main() {
 
 	// Пример 3: Использование Mock конфигурации для тестов
 	log.Println("\n=== Mock Configuration (for tests) ===")
-	mockConfig := db.NewMockDb()
+	mockConfig := db.NewMockDbConfig()
 	dbConn, err = db.NewConnection(mockConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)

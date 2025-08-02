@@ -56,7 +56,7 @@ func (c *dbEnvConfig) SSLMode(defaultValue string) string {
 }
 
 
-func NewConfigDb() *dbEnvConfig {
+func NewConfigDbConfig() *dbEnvConfig {
 	return &dbEnvConfig{}
 }
 
@@ -200,6 +200,6 @@ func (c *dbMockConfig) SSLMode(defaultValue string) string {
 }
 
 
-func NewMockDb() *dbMockConfig {
+func NewMockDbConfig() *dbMockConfig {
 	return &dbMockConfig{}
 }

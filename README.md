@@ -24,7 +24,7 @@ go install github.com/apopov-app/ggconfig@latest
 ```
 - Создает файл в том же пакете: `internal/db/db.gen.go`
 - Пакет: `package db`
-- Функции: `NewConfigDb()`, `NewYAMLConfig()`, `NewMockDb()`
+- Функции: `NewConfigDbConfig()`, `NewYAMLConfig()`, `NewMockDbConfig()`
 
 #### С --output
 ```go
@@ -32,7 +32,7 @@ go install github.com/apopov-app/ggconfig@latest
 ```
 - Создает файл в указанной папке: `internal/genconfig/db.gen.go`
 - Пакет: `package genconfig` (название папки)
-- Функции: `NewConfigDb()`, `NewYAMLConfig()`, `NewMockDb()`
+- Функции: `NewConfigDbConfig()`, `NewYAMLConfig()`, `NewMockDbConfig()`
 
 #### С --example
 ```go
@@ -124,7 +124,7 @@ func NewConnection(config Config) (*Database, error) {
 
 ```go
 func main() {
-    dbConfig := db.NewConfigDb()  // ← получаем ENV реализацию
+    dbConfig := db.NewConfigDbConfig()  // ← получаем ENV реализацию
     db, err := db.NewConnection(dbConfig)  // ← прокидываем как зависимость
     // ...
 }

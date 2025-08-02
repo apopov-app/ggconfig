@@ -196,7 +196,7 @@ func generateImplementation(info *InterfaceInfo, outputPath string) error {
 		isSamePackage = true
 	} else {
 		// Пользователь указал свой путь
-		fullOutputPath = filepath.Join("..", "..", outputPath)
+		fullOutputPath = outputPath
 		packageName = filepath.Base(outputPath)
 		isSamePackage = false
 	}
@@ -366,7 +366,7 @@ func (c *{{$.PackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.R
 }
 {{end}}
 
-func NewConfig{{.PackageName | title}}() *{{.PackageName}}EnvConfig {
+func New{{.PackageName | title}}{{.InterfaceName | title}}() *{{.PackageName}}EnvConfig {
 	return &{{.PackageName}}EnvConfig{}
 }
 
@@ -376,7 +376,7 @@ type {{.PackageName}}YAMLConfig struct {
 	data []byte
 }
 
-func NewYAMLConfig(data []byte) *{{.PackageName}}YAMLConfig {
+func New{{.PackageName | title}}{{.InterfaceName | title}}YAML(data []byte) *{{.PackageName}}YAMLConfig {
 	return &{{.PackageName}}YAMLConfig{
 		data: data,
 	}
@@ -410,7 +410,7 @@ func (c *{{$.PackageName}}MockConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.
 }
 {{end}}
 
-func NewMock{{.PackageName | title}}() *{{.PackageName}}MockConfig {
+func New{{.PackageName | title}}{{.InterfaceName | title}}Mock() *{{.PackageName}}MockConfig {
 	return &{{.PackageName}}MockConfig{}
 }
 `

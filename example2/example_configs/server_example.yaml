@@ -1,0 +1,17 @@
+# Example configuration for server package
+# Copy this file to config.yaml or use with your application
+
+server:
+  # Port - int parameter - Port returns server port number
+  Port: 0
+  # Host - string parameter - Host returns server host address
+  Host: ""
+  # ReadTimeout - int parameter - ReadTimeout returns read timeout in seconds
+  ReadTimeout: 0
+  # WriteTimeout - int parameter - WriteTimeout returns write timeout in seconds
+  WriteTimeout: 0
+
+# Usage:
+# 1. Copy this file to config.yaml
+# 2. Or use with viper/cobra for config management
+# 3. Or convert to environment variables
