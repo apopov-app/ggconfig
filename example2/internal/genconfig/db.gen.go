@@ -6,7 +6,6 @@ import (
 	"os"
 	
 	"gopkg.in/yaml.v3"
-	"github.com/apopov-app/ggconfig/example2/internal/db"
 )
 
 // ===== ENV Implementation =====
@@ -57,7 +56,7 @@ func (c *dbEnvConfig) SSLMode(defaultValue string) string {
 }
 
 
-func NewConfigDb() db.Config {
+func NewConfigDb() *dbEnvConfig {
 	return &dbEnvConfig{}
 }
 
@@ -67,7 +66,7 @@ type dbYAMLConfig struct {
 	data []byte
 }
 
-func NewYAMLConfig(data []byte) db.Config {
+func NewYAMLConfig(data []byte) *dbYAMLConfig {
 	return &dbYAMLConfig{
 		data: data,
 	}
@@ -201,6 +200,6 @@ func (c *dbMockConfig) SSLMode(defaultValue string) string {
 }
 
 
-func NewMockDb() db.Config {
+func NewMockDb() *dbMockConfig {
 	return &dbMockConfig{}
 }

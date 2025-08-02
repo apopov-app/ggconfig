@@ -243,14 +243,12 @@ func generateImplementation(info *InterfaceInfo, outputPath string) error {
 		PackageName    string
 		InterfaceName  string
 		Methods        []Method
-		ImportPath     string
 		GenPackageName string
 		IsSamePackage  bool
 	}{
 		PackageName:    info.PackageName,
 		InterfaceName:  info.InterfaceName,
 		Methods:        info.Methods,
-		ImportPath:     fmt.Sprintf("github.com/apopov-app/ggconfig/example2/internal/%s", info.PackageName),
 		GenPackageName: packageName,
 		IsSamePackage:  isSamePackage,
 	}
@@ -304,12 +302,10 @@ func generateExampleConfig(info *InterfaceInfo, examplePath string) error {
 		PackageName   string
 		InterfaceName string
 		Methods       []Method
-		ImportPath    string
 	}{
 		PackageName:   info.PackageName,
 		InterfaceName: info.InterfaceName,
 		Methods:       info.Methods,
-		ImportPath:    fmt.Sprintf("github.com/apopov-app/ggconfig/internal/%s", info.PackageName),
 	}
 
 	return tmpl.Execute(file, data)
@@ -358,7 +354,6 @@ import (
 	"os"
 	{{if hasIntType .Methods}}"strconv"{{end}}
 	"gopkg.in/yaml.v3"
-	{{if not .IsSamePackage}}"{{.ImportPath}}"{{end}}
 )
 
 // ===== ENV Implementation =====
@@ -371,7 +366,7 @@ func (c *{{$.PackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.R
 }
 {{end}}
 
-func NewConfig{{.PackageName | title}}() {{.PackageName}}.{{.InterfaceName}} {
+func NewConfig{{.PackageName | title}}() *{{.PackageName}}EnvConfig {
 	return &{{.PackageName}}EnvConfig{}
 }
 
@@ -381,7 +376,7 @@ type {{.PackageName}}YAMLConfig struct {
 	data []byte
 }
 
-func NewYAMLConfig(data []byte) {{.PackageName}}.{{.InterfaceName}} {
+func NewYAMLConfig(data []byte) *{{.PackageName}}YAMLConfig {
 	return &{{.PackageName}}YAMLConfig{
 		data: data,
 	}
@@ -415,7 +410,7 @@ func (c *{{$.PackageName}}MockConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.
 }
 {{end}}
 
-func NewMock{{.PackageName | title}}() {{.PackageName}}.{{.InterfaceName}} {
+func NewMock{{.PackageName | title}}() *{{.PackageName}}MockConfig {
 	return &{{.PackageName}}MockConfig{}
 }
 `
