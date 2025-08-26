@@ -15,6 +15,10 @@ go install github.com/apopov-app/ggconfig@latest
 - `--interface=Config` - название интерфейса для генерации (обязательный параметр)
 - `--output=internal/configs` - путь для создания сгенерированных файлов (опционально, по умолчанию: создает в текущем пакете)
 - `--example=configs` - путь для создания примеров YAML файлов (опционально)
+- `--alias` - задаёт алиасы для ключей. Повторяемый флаг. Форматы:
+  - `env.<Method>=ALIAS1,ALIAS2` — алиасы для переменной окружения метода (например, `env.Host=SERVER_ADDRESS_ALIASE`)
+  - `yaml.section=ALIAS1,ALIAS2` — алиасы имени YAML-секции (например, `server` → `svc`)
+  - `yaml.key.<Method>=ALIAS1,ALIAS2` — алиасы ключей внутри секции (например, `yaml.key.Host=hostname`)
 
 ### Как влияют параметры
 
@@ -103,6 +107,12 @@ type Config interface {
 go generate ./...
 ```
 
+С алиасами:
+
+```go
+//go:generate ggconfig --interface=Config --output=internal/gconfig --alias env.Host=SERVER_ADDRESS_ALIASE
+```
+
 ### 3. Используем в коде
 
 ```go
@@ -124,9 +134,14 @@ func NewConnection(config Config) (*Database, error) {
 
 ```go
 func main() {
-    dbConfig := db.NewConfigDbConfig()  // ← получаем ENV реализацию
-    db, err := db.NewConnection(dbConfig)  // ← прокидываем как зависимость
-    // ...
+    // Композитная конфигурация: сначала ENV (включая алиасы), затем YAML
+    envCfg := gconfig.NewServerConfig()
+    yamlCfg := gconfig.NewServerConfigYAML(yamlData)
+    cfg := gconfig.NewServerConfigAll(envCfg, yamlCfg)
+
+    host := cfg.Host("localhost")
+    port := cfg.Port(8080)
+    _ = host; _ = port
 }
 ```
 

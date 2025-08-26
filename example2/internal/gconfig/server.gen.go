@@ -23,6 +23,9 @@ func (c *serverEnvConfig) Port(defaultValue int) int {
 }
 
 func (c *serverEnvConfig) Host(defaultValue string) string {
+	if value := os.Getenv("SERVER_ADDRESS_ALIASE"); value != "" {
+    return value
+}
 	if value := os.Getenv("SERVER_HOST"); value != "" {
 		return value
 	}
@@ -48,7 +51,7 @@ func (c *serverEnvConfig) WriteTimeout(defaultValue int) int {
 }
 
 
-func NewConfigServerConfig() *serverEnvConfig {
+func NewServerConfig() *serverEnvConfig {
 	return &serverEnvConfig{}
 }
 
@@ -58,7 +61,7 @@ type serverYAMLConfig struct {
 	data []byte
 }
 
-func NewYAMLServerConfig(data []byte) *serverYAMLConfig {
+func NewServerConfigYAML(data []byte) *serverYAMLConfig {
 	return &serverYAMLConfig{
 		data: data,
 	}
@@ -70,14 +73,16 @@ func (c *serverYAMLConfig) Port(defaultValue int) int {
 	if err := yaml.Unmarshal(c.data, &config); err != nil {
 		return defaultValue
 	}
-	
-	// Читаем секцию server
+
+	// Алиасные секции
+
+	// Основная секция server
 	if section, ok := config["server"].(map[string]interface{}); ok {
 		if value, ok := section["port"].(int); ok {
 			return value
 		}
 	}
-	
+
 	return defaultValue
 }
 
@@ -86,14 +91,16 @@ func (c *serverYAMLConfig) Host(defaultValue string) string {
 	if err := yaml.Unmarshal(c.data, &config); err != nil {
 		return defaultValue
 	}
-	
-	// Читаем секцию server
+
+	// Алиасные секции
+
+	// Основная секция server
 	if section, ok := config["server"].(map[string]interface{}); ok {
 		if value, ok := section["host"].(string); ok {
 			return value
 		}
 	}
-	
+
 	return defaultValue
 }
 
@@ -102,14 +109,16 @@ func (c *serverYAMLConfig) ReadTimeout(defaultValue int) int {
 	if err := yaml.Unmarshal(c.data, &config); err != nil {
 		return defaultValue
 	}
-	
-	// Читаем секцию server
+
+	// Алиасные секции
+
+	// Основная секция server
 	if section, ok := config["server"].(map[string]interface{}); ok {
 		if value, ok := section["readtimeout"].(int); ok {
 			return value
 		}
 	}
-	
+
 	return defaultValue
 }
 
@@ -118,14 +127,16 @@ func (c *serverYAMLConfig) WriteTimeout(defaultValue int) int {
 	if err := yaml.Unmarshal(c.data, &config); err != nil {
 		return defaultValue
 	}
-	
-	// Читаем секцию server
+
+	// Алиасные секции
+
+	// Основная секция server
 	if section, ok := config["server"].(map[string]interface{}); ok {
 		if value, ok := section["writetimeout"].(int); ok {
 			return value
 		}
 	}
-	
+
 	return defaultValue
 }
 
@@ -152,6 +163,72 @@ func (c *serverMockConfig) WriteTimeout(defaultValue int) int {
 }
 
 
-func NewMockServerConfig() *serverMockConfig {
+func NewServerConfigMock() *serverMockConfig {
 	return &serverMockConfig{}
 }
+
+// ===== Composite Implementation =====
+
+type serverAllConfig struct {
+	sources []interface{
+		Port(defaultValue int) int
+		Host(defaultValue string) string
+		ReadTimeout(defaultValue int) int
+		WriteTimeout(defaultValue int) int
+	}
+}
+
+func NewServerConfigAll(sources ...interface{
+	Port(defaultValue int) int
+	Host(defaultValue string) string
+	ReadTimeout(defaultValue int) int
+	WriteTimeout(defaultValue int) int
+}) *serverAllConfig {
+	return &serverAllConfig{sources: sources}
+}
+
+
+func (c *serverAllConfig) Port(defaultValue int) int {
+	sentinel := -2147483648
+	for _, s := range c.sources {
+		v := s.Port(sentinel)
+		if v != sentinel {
+			return v
+		}
+	}
+	return defaultValue
+}
+
+func (c *serverAllConfig) Host(defaultValue string) string {
+	sentinel := "__GGCONFIG_SENTINEL__"
+	for _, s := range c.sources {
+		v := s.Host(sentinel)
+		if v != sentinel {
+			return v
+		}
+	}
+	return defaultValue
+}
+
+func (c *serverAllConfig) ReadTimeout(defaultValue int) int {
+	sentinel := -2147483648
+	for _, s := range c.sources {
+		v := s.ReadTimeout(sentinel)
+		if v != sentinel {
+			return v
+		}
+	}
+	return defaultValue
+}
+
+func (c *serverAllConfig) WriteTimeout(defaultValue int) int {
+	sentinel := -2147483648
+	for _, s := range c.sources {
+		v := s.WriteTimeout(sentinel)
+		if v != sentinel {
+			return v
+		}
+	}
+	return defaultValue
+}
+

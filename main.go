@@ -26,10 +26,34 @@ type InterfaceInfo struct {
 	Methods       []Method
 }
 
+// Настройки алиасов, передаваемые через --alias
+type AliasSettings struct {
+	// ENV: MethodName -> []EnvVarAlias (полные имена переменных окружения)
+	Env map[string][]string
+	// YAML: алиасы имени секции (например, server_name, svc)
+	YAMLSection []string
+	// YAML: MethodName -> []KeyAlias внутри секции
+	YAMLKey map[string][]string
+}
+
+// Поддержка повторяющегося флага --alias
+type aliasFlag []string
+
+func (a *aliasFlag) String() string {
+	return strings.Join(*a, ",")
+}
+
+func (a *aliasFlag) Set(value string) error {
+	*a = append(*a, value)
+	return nil
+}
+
 func main() {
 	interfaceName := flag.String("interface", "", "interface name")
 	outputPath := flag.String("output", "", "output directory path")
 	examplePath := flag.String("example", "", "generate example config file")
+	var aliasFlags aliasFlag
+	flag.Var(&aliasFlags, "alias", "alias mapping: env.<Method>=ALIAS1,ALIAS2 | yaml.section=ALIAS1,ALIAS2 | yaml.key.<Method>=ALIAS1,ALIAS2")
 	flag.Parse()
 
 	// Автоматически определяем пакет из текущей директории
@@ -52,13 +76,16 @@ func main() {
 		log.Fatalf("failed to parse interface: %v", err)
 	}
 
+	// Парсим алиасы
+	aliasSettings := parseAliasSettings(aliasFlags)
+
 	fmt.Printf("Found %d methods in interface\n", len(info.Methods))
 	for _, method := range info.Methods {
 		fmt.Printf("  - %s(%s) %s\n", method.Name, method.ParamType, method.ReturnType)
 	}
 
 	// Генерируем все реализации в одном файле
-	if err := generateImplementation(info, *outputPath); err != nil {
+	if err := generateImplementation(info, aliasSettings, *outputPath); err != nil {
 		log.Fatalf("failed to generate implementation: %v", err)
 	}
 
@@ -168,6 +195,87 @@ func getEnvValue(envKey, defaultValue, returnType string) string {
 	}
 }
 
+// Генерирует фрагмент кода проверки ENV по конкретному ключу без возврата default
+func getEnvCheckSnippet(envKey, returnType string) string {
+	switch returnType {
+	case "int":
+		return fmt.Sprintf(`if value := os.Getenv("%s"); value != "" {
+    if intValue, err := strconv.Atoi(value); err == nil {
+        return intValue
+    }
+}`, envKey)
+	case "string":
+		return fmt.Sprintf(`if value := os.Getenv("%s"); value != "" {
+    return value
+}`, envKey)
+	default:
+		return fmt.Sprintf(`if value := os.Getenv("%s"); value != "" {
+    return value
+}`, envKey)
+	}
+}
+
+// Парсинг повторяющихся флагов --alias
+// Допустимые формы:
+// - env.<Method>=ALIAS1,ALIAS2
+// - yaml.section=ALIAS1,ALIAS2
+// - yaml.key.<Method>=ALIAS1,ALIAS2
+func parseAliasSettings(flags aliasFlag) AliasSettings {
+	settings := AliasSettings{
+		Env:         map[string][]string{},
+		YAMLSection: []string{},
+		YAMLKey:     map[string][]string{},
+	}
+
+	for _, item := range flags {
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		left := strings.TrimSpace(parts[0])
+		right := strings.TrimSpace(parts[1])
+		var values []string
+		if right != "" {
+			for _, v := range strings.Split(right, ",") {
+				vv := strings.TrimSpace(v)
+				if vv != "" {
+					values = append(values, vv)
+				}
+			}
+		}
+
+		segs := strings.Split(left, ".")
+		if len(segs) == 0 {
+			continue
+		}
+		switch segs[0] {
+		case "env":
+			if len(segs) == 2 {
+				method := segs[1]
+				if len(values) > 0 {
+					settings.Env[method] = append(settings.Env[method], values...)
+				}
+			}
+		case "yaml":
+			if len(segs) >= 2 {
+				switch segs[1] {
+				case "section":
+					settings.YAMLSection = append(settings.YAMLSection, values...)
+				case "key":
+					if len(segs) == 3 {
+						method := segs[2]
+						if len(values) > 0 {
+							settings.YAMLKey[method] = append(settings.YAMLKey[method], values...)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return settings
+}
+
 func getMethodSignature(funcType *ast.FuncType) (string, string) {
 	// Получаем тип параметра (для простоты берем первый)
 	var paramType string
@@ -183,7 +291,7 @@ func getMethodSignature(funcType *ast.FuncType) (string, string) {
 	return paramType, returnType
 }
 
-func generateImplementation(info *InterfaceInfo, outputPath string) error {
+func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPath string) error {
 	// Определяем путь для генерации
 	var fullOutputPath string
 	var packageName string
@@ -220,14 +328,10 @@ func generateImplementation(info *InterfaceInfo, outputPath string) error {
 	tmpl := template.Must(template.New("config").Funcs(template.FuncMap{
 		"title":  strings.Title,
 		"envKey": func(methodName string) string { return getEnvKey(info.PackageName, methodName) },
-		"envValue": func(methodName, returnType string) string {
-			// methodName здесь на самом деле returnType, а returnType - это methodName
-			// Это из-за того, как работает шаблон
-			actualMethodName := returnType
-			actualReturnType := methodName
-			envKey := getEnvKey(info.PackageName, actualMethodName)
-			return getEnvValue(envKey, "defaultValue", actualReturnType)
-		},
+		// Проверка ENV по ключу без возврата default
+		"envCheck": func(returnType, key string) string { return getEnvCheckSnippet(key, returnType) },
+		// Возврат ENV по основному ключу с fallback на default
+		"envReturn": func(returnType, key string) string { return getEnvValue(key, "defaultValue", returnType) },
 		"hasIntType": func(methods []Method) bool {
 			for _, method := range methods {
 				if method.ReturnType == "int" {
@@ -237,6 +341,36 @@ func generateImplementation(info *InterfaceInfo, outputPath string) error {
 			return false
 		},
 		"toLower": strings.ToLower,
+		// Алиасы
+		"envAliasKeys": func(methodName string) []string {
+			if aliases.Env == nil {
+				return nil
+			}
+			return aliases.Env[methodName]
+		},
+		"yamlSectionAliases": func() []string { return aliases.YAMLSection },
+		"yamlKeyAliases": func(methodName string) []string {
+			if aliases.YAMLKey == nil {
+				return nil
+			}
+			return aliases.YAMLKey[methodName]
+		},
+		"yamlAssertType": func(returnType string) string {
+			switch returnType {
+			case "int":
+				return "int"
+			default:
+				return "string"
+			}
+		},
+		"sentinelValue": func(returnType string) string {
+			switch returnType {
+			case "int":
+				return "-2147483648"
+			default:
+				return "\"__GGCONFIG_SENTINEL__\""
+			}
+		},
 	}).Parse(unifiedTemplate))
 
 	data := struct {
@@ -362,7 +496,11 @@ type {{.PackageName}}EnvConfig struct{}
 
 {{range .Methods}}
 func (c *{{$.PackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.ReturnType}} {
-	{{.Name | envValue .ReturnType}}
+	{{- $ret := .ReturnType -}}
+	{{- range envAliasKeys .Name}}
+	{{envCheck $ret .}}
+	{{- end}}
+	{{envReturn .ReturnType (envKey .Name)}}
 }
 {{end}}
 
@@ -388,14 +526,34 @@ func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.
 	if err := yaml.Unmarshal(c.data, &config); err != nil {
 		return defaultValue
 	}
-	
-	// Читаем секцию {{$.PackageName}}
-	if section, ok := config["{{$.PackageName}}"].(map[string]interface{}); ok {
-		if value, ok := section["{{.Name | toLower}}"].({{.ReturnType}}); ok {
+
+	// Алиасные секции
+	{{- $assert := (yamlAssertType .ReturnType) -}}
+	{{- range yamlSectionAliases }}
+	if section, ok := config["{{.}}"].(map[string]interface{}); ok {
+		{{- range yamlKeyAliases $.Name }}
+		if value, ok := section["{{.}}"].({{$assert}}); ok {
+			return value
+		}
+		{{- end}}
+		if value, ok := section["{{$.Name | toLower}}"].({{$assert}}); ok {
 			return value
 		}
 	}
-	
+	{{- end}}
+
+	// Основная секция {{$.PackageName}}
+	if section, ok := config["{{$.PackageName}}"].(map[string]interface{}); ok {
+		{{- range yamlKeyAliases .Name }}
+		if value, ok := section["{{.}}"].({{$assert}}); ok {
+			return value
+		}
+		{{- end}}
+		if value, ok := section["{{.Name | toLower}}"].({{$assert}}); ok {
+			return value
+		}
+	}
+
 	return defaultValue
 }
 {{end}}
@@ -413,6 +571,37 @@ func (c *{{$.PackageName}}MockConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.
 func New{{.PackageName | title}}{{.InterfaceName | title}}Mock() *{{.PackageName}}MockConfig {
 	return &{{.PackageName}}MockConfig{}
 }
+
+// ===== Composite Implementation =====
+
+type {{.PackageName}}AllConfig struct {
+	sources []interface{
+		{{- range .Methods}}
+		{{.Name}}(defaultValue {{.ParamType}}) {{.ReturnType}}
+		{{- end}}
+	}
+}
+
+func New{{.PackageName | title}}{{.InterfaceName | title}}All(sources ...interface{
+	{{- range .Methods}}
+	{{.Name}}(defaultValue {{.ParamType}}) {{.ReturnType}}
+	{{- end}}
+}) *{{.PackageName}}AllConfig {
+	return &{{.PackageName}}AllConfig{sources: sources}
+}
+
+{{range .Methods}}
+func (c *{{$.PackageName}}AllConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.ReturnType}} {
+	sentinel := {{sentinelValue .ReturnType}}
+	for _, s := range c.sources {
+		v := s.{{.Name}}(sentinel)
+		if v != sentinel {
+			return v
+		}
+	}
+	return defaultValue
+}
+{{end}}
 `
 
 const exampleTemplate = `# Example configuration for {{.PackageName}} package
