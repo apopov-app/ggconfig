@@ -529,14 +529,15 @@ func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) {{.
 
 	// Алиасные секции
 	{{- $assert := (yamlAssertType .ReturnType) -}}
+	{{- $methodName := .Name -}}
 	{{- range yamlSectionAliases }}
 	if section, ok := config["{{.}}"].(map[string]interface{}); ok {
-		{{- range yamlKeyAliases $.Name }}
+		{{- range yamlKeyAliases $methodName }}
 		if value, ok := section["{{.}}"].({{$assert}}); ok {
 			return value
 		}
 		{{- end}}
-		if value, ok := section["{{$.Name | toLower}}"].({{$assert}}); ok {
+		if value, ok := section["{{$methodName | toLower}}"].({{$assert}}); ok {
 			return value
 		}
 	}
