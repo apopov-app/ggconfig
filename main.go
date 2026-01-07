@@ -790,19 +790,6 @@ func init() {
 			yamlCfg := New{{.PackageName | title}}{{.InterfaceName | title}}YAMLConfigParsed(y)
 			return New{{.PackageName | title}}{{.InterfaceName | title}}All(envCfg, yamlCfg)
 		},
-		Validate: func(y *runtime.YAML, mapKey func(string) string) []string {
-			envCfg := New{{.PackageName | title}}{{.InterfaceName | title}}EnvConfigWithMap(mapKey)
-			yamlCfg := New{{.PackageName | title}}{{.InterfaceName | title}}YAMLConfigParsed(y)
-			allCfg := New{{.PackageName | title}}{{.InterfaceName | title}}All(envCfg, yamlCfg)
-			var missing []string
-			{{- range .Methods}}
-			_, ok := allCfg.{{.Name}}({{paramDefaultLiteral .ParamType}})
-			if !ok {
-				missing = append(missing, "{{$.PackageName}}.{{.Name}}")
-			}
-			{{- end}}
-			return missing
-		},
 	})
 }
 
