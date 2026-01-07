@@ -1,0 +1,10 @@
+// Вариант 1, использование обертки, параметры так-же могут быть в любом порядке
+globalConfig = ggconfig.NewGlobalConfig(ggconfig.NewGlobalYamlConfig("path/to/config.yaml"), gconfig.NewEnvConfig(func(key string) string {
+    return key // для постобработки ключей
+})))
+
+
+// Вариант 2, Секции по одному
+dbConfig := ggconfig.NewPgConfigYAML("path/to/db.yaml")
+- ИЛИ - 
+dbConfig := ggconfig.NewPgConfigAll(ggconfig.NewPgConfigYAML("path/to/db.yaml"), ggconfig.NewPgEnvConfig())
