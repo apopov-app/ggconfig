@@ -713,8 +713,8 @@ func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{
 	{{- $section := . -}}
 	if v, ok := c.y.GetInt("{{$section}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
-	}
-	{{- end}}
+		}
+		{{- end}}
 	// Основная секция {{$.PackageName}}
 	if v, ok := c.y.GetInt("{{$.PackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
@@ -731,7 +731,7 @@ func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{
 	// Основная секция {{$.PackageName}}
 	if v, ok := c.y.GetString("{{$.PackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
-	}
+		}
 	return defaultValue, false
 	{{- end }}
 }
