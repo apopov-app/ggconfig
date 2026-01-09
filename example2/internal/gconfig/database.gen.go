@@ -5,180 +5,150 @@ package gconfig
 import (
 	"os"
 	
-	"gopkg.in/yaml.v3"
+	"github.com/apopov-app/ggconfig/runtime"
 )
 
 // ===== ENV Implementation =====
 
-type databaseEnvConfig struct{}
-
-
-func (c *databaseEnvConfig) Host(defaultValue string) string {
-	if value := os.Getenv("DATABASE_HOST"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *databaseEnvConfig) Port(defaultValue string) string {
-	if value := os.Getenv("DATABASE_PORT"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *databaseEnvConfig) User(defaultValue string) string {
-	if value := os.Getenv("DATABASE_USER"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *databaseEnvConfig) Password(defaultValue string) string {
-	if value := os.Getenv("DATABASE_PASSWORD"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *databaseEnvConfig) Name(defaultValue string) string {
-	if value := os.Getenv("DATABASE_NAME"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *databaseEnvConfig) SSLMode(defaultValue string) string {
-	if value := os.Getenv("DATABASE_SSL_MODE"); value != "" {
-		return value
-	}
-	return defaultValue
+type databaseEnvConfig struct{
+	mapKey func(string) string
 }
 
 
-func NewDatabaseConfig() *databaseEnvConfig {
-	return &databaseEnvConfig{}
+func (c *databaseEnvConfig) Host(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DATABASE_HOST")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *databaseEnvConfig) Port(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DATABASE_PORT")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *databaseEnvConfig) User(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DATABASE_USER")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *databaseEnvConfig) Password(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DATABASE_PASSWORD")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *databaseEnvConfig) Name(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DATABASE_NAME")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *databaseEnvConfig) SSLMode(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DATABASE_SSL_MODE")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+
+func NewDatabaseConfigEnvConfig() *databaseEnvConfig {
+	return NewDatabaseConfigEnvConfigWithMap(nil)
+}
+
+func NewDatabaseConfigEnvConfigWithMap(mapKey func(string) string) *databaseEnvConfig {
+	if mapKey == nil {
+		mapKey = func(k string) string { return k }
+	}
+	return &databaseEnvConfig{mapKey: mapKey}
 }
 
 // ===== YAML Implementation =====
 
 type databaseYAMLConfig struct {
-	data []byte
+	y *runtime.YAML
+	err error
 }
 
-func NewDatabaseConfigYAML(data []byte) *databaseYAMLConfig {
+func NewDatabaseConfigYAMLConfig(path string) *databaseYAMLConfig {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return &databaseYAMLConfig{y: &runtime.YAML{}, err: err}
+	}
+	y, err := runtime.ParseYAML(b)
+	if err != nil {
+		return &databaseYAMLConfig{y: &runtime.YAML{}, err: err}
+	}
+	return &databaseYAMLConfig{y: y}
+}
+
+func NewDatabaseConfigYAMLConfigParsed(y *runtime.YAML) *databaseYAMLConfig {
 	return &databaseYAMLConfig{
-		data: data,
+		y: y,
 	}
 }
 
+func (c *databaseYAMLConfig) Err() error { return c.err }
 
-func (c *databaseYAMLConfig) Host(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
-	}
 
+func (c *databaseYAMLConfig) Host(defaultValue string) (string, bool) {
 	// Алиасные секции
-
 	// Основная секция database
-	if section, ok := config["database"].(map[string]interface{}); ok {
-		if value, ok := section["host"].(string); ok {
-			return value
-		}
+	if v, ok := c.y.GetString("database", "host"); ok {
+		return v, true
 	}
-
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseYAMLConfig) Port(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
-	}
-
+func (c *databaseYAMLConfig) Port(defaultValue string) (string, bool) {
 	// Алиасные секции
-
 	// Основная секция database
-	if section, ok := config["database"].(map[string]interface{}); ok {
-		if value, ok := section["port"].(string); ok {
-			return value
-		}
+	if v, ok := c.y.GetString("database", "port"); ok {
+		return v, true
 	}
-
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseYAMLConfig) User(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
-	}
-
+func (c *databaseYAMLConfig) User(defaultValue string) (string, bool) {
 	// Алиасные секции
-
 	// Основная секция database
-	if section, ok := config["database"].(map[string]interface{}); ok {
-		if value, ok := section["user"].(string); ok {
-			return value
-		}
+	if v, ok := c.y.GetString("database", "user"); ok {
+		return v, true
 	}
-
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseYAMLConfig) Password(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
-	}
-
+func (c *databaseYAMLConfig) Password(defaultValue string) (string, bool) {
 	// Алиасные секции
-
 	// Основная секция database
-	if section, ok := config["database"].(map[string]interface{}); ok {
-		if value, ok := section["password"].(string); ok {
-			return value
-		}
+	if v, ok := c.y.GetString("database", "password"); ok {
+		return v, true
 	}
-
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseYAMLConfig) Name(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
-	}
-
+func (c *databaseYAMLConfig) Name(defaultValue string) (string, bool) {
 	// Алиасные секции
-
 	// Основная секция database
-	if section, ok := config["database"].(map[string]interface{}); ok {
-		if value, ok := section["name"].(string); ok {
-			return value
-		}
+	if v, ok := c.y.GetString("database", "name"); ok {
+		return v, true
 	}
-
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseYAMLConfig) SSLMode(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
-	}
-
+func (c *databaseYAMLConfig) SSLMode(defaultValue string) (string, bool) {
 	// Алиасные секции
-
 	// Основная секция database
-	if section, ok := config["database"].(map[string]interface{}); ok {
-		if value, ok := section["sslmode"].(string); ok {
-			return value
-		}
+	if v, ok := c.y.GetString("database", "sslmode"); ok {
+		return v, true
 	}
-
-	return defaultValue
+	return defaultValue, false
 }
 
 
@@ -187,28 +157,28 @@ func (c *databaseYAMLConfig) SSLMode(defaultValue string) string {
 type databaseMockConfig struct{}
 
 
-func (c *databaseMockConfig) Host(defaultValue string) string {
-	return defaultValue
+func (c *databaseMockConfig) Host(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *databaseMockConfig) Port(defaultValue string) string {
-	return defaultValue
+func (c *databaseMockConfig) Port(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *databaseMockConfig) User(defaultValue string) string {
-	return defaultValue
+func (c *databaseMockConfig) User(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *databaseMockConfig) Password(defaultValue string) string {
-	return defaultValue
+func (c *databaseMockConfig) Password(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *databaseMockConfig) Name(defaultValue string) string {
-	return defaultValue
+func (c *databaseMockConfig) Name(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *databaseMockConfig) SSLMode(defaultValue string) string {
-	return defaultValue
+func (c *databaseMockConfig) SSLMode(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
 
@@ -220,90 +190,111 @@ func NewDatabaseConfigMock() *databaseMockConfig {
 
 type databaseAllConfig struct {
 	sources []interface{
-		Host(defaultValue string) string
-		Port(defaultValue string) string
-		User(defaultValue string) string
-		Password(defaultValue string) string
-		Name(defaultValue string) string
-		SSLMode(defaultValue string) string
+		Host(defaultValue string) (string, bool)
+		Port(defaultValue string) (string, bool)
+		User(defaultValue string) (string, bool)
+		Password(defaultValue string) (string, bool)
+		Name(defaultValue string) (string, bool)
+		SSLMode(defaultValue string) (string, bool)
 	}
 }
 
 func NewDatabaseConfigAll(sources ...interface{
-	Host(defaultValue string) string
-	Port(defaultValue string) string
-	User(defaultValue string) string
-	Password(defaultValue string) string
-	Name(defaultValue string) string
-	SSLMode(defaultValue string) string
+	Host(defaultValue string) (string, bool)
+	Port(defaultValue string) (string, bool)
+	User(defaultValue string) (string, bool)
+	Password(defaultValue string) (string, bool)
+	Name(defaultValue string) (string, bool)
+	SSLMode(defaultValue string) (string, bool)
 }) *databaseAllConfig {
 	return &databaseAllConfig{sources: sources}
 }
 
 
-func (c *databaseAllConfig) Host(defaultValue string) string {
-	sentinel := "__GGCONFIG_SENTINEL__"
+func (c *databaseAllConfig) Host(defaultValue string) (string, bool) {
 	for _, s := range c.sources {
-		v := s.Host(sentinel)
-		if v != sentinel {
-			return v
+		v, ok := s.Host(defaultValue)
+		if ok {
+			return v, true
 		}
 	}
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseAllConfig) Port(defaultValue string) string {
-	sentinel := "__GGCONFIG_SENTINEL__"
+func (c *databaseAllConfig) Port(defaultValue string) (string, bool) {
 	for _, s := range c.sources {
-		v := s.Port(sentinel)
-		if v != sentinel {
-			return v
+		v, ok := s.Port(defaultValue)
+		if ok {
+			return v, true
 		}
 	}
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseAllConfig) User(defaultValue string) string {
-	sentinel := "__GGCONFIG_SENTINEL__"
+func (c *databaseAllConfig) User(defaultValue string) (string, bool) {
 	for _, s := range c.sources {
-		v := s.User(sentinel)
-		if v != sentinel {
-			return v
+		v, ok := s.User(defaultValue)
+		if ok {
+			return v, true
 		}
 	}
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseAllConfig) Password(defaultValue string) string {
-	sentinel := "__GGCONFIG_SENTINEL__"
+func (c *databaseAllConfig) Password(defaultValue string) (string, bool) {
 	for _, s := range c.sources {
-		v := s.Password(sentinel)
-		if v != sentinel {
-			return v
+		v, ok := s.Password(defaultValue)
+		if ok {
+			return v, true
 		}
 	}
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseAllConfig) Name(defaultValue string) string {
-	sentinel := "__GGCONFIG_SENTINEL__"
+func (c *databaseAllConfig) Name(defaultValue string) (string, bool) {
 	for _, s := range c.sources {
-		v := s.Name(sentinel)
-		if v != sentinel {
-			return v
+		v, ok := s.Name(defaultValue)
+		if ok {
+			return v, true
 		}
 	}
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *databaseAllConfig) SSLMode(defaultValue string) string {
-	sentinel := "__GGCONFIG_SENTINEL__"
+func (c *databaseAllConfig) SSLMode(defaultValue string) (string, bool) {
 	for _, s := range c.sources {
-		v := s.SSLMode(sentinel)
-		if v != sentinel {
-			return v
+		v, ok := s.SSLMode(defaultValue)
+		if ok {
+			return v, true
 		}
 	}
-	return defaultValue
+	return defaultValue, false
+}
+
+
+
+func init() {
+	Register("database", Provider{
+		Package: "database",
+		NewAllFromParsed: func(y *runtime.YAML, mapKey func(string) string) any {
+			envCfg := NewDatabaseConfigEnvConfigWithMap(mapKey)
+			yamlCfg := NewDatabaseConfigYAMLConfigParsed(y)
+			return NewDatabaseConfigAll(envCfg, yamlCfg)
+		},
+	})
+}
+
+// GetDatabase returns the concrete AllConfig type for this package.
+// It can be passed anywhere the original interface is expected (structural typing).
+func (g *GlobalConfig) GetDatabase() (*databaseAllConfig, bool) {
+	registryMu.RLock()
+	p, ok := registry["database"]
+	registryMu.RUnlock()
+	if !ok || p.NewAllFromParsed == nil {
+		return nil, false
+	}
+	v := p.NewAllFromParsed(g.y, g.mapKey)
+	cfg, ok := v.(*databaseAllConfig)
+	return cfg, ok
 }
 
