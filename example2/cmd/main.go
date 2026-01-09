@@ -1,26 +1,59 @@
 package main
 
 import (
+	"flag"
 	"log"
-	"os"
 
+	"github.com/apopov-app/ggconfig/example2/internal/database"
 	"github.com/apopov-app/ggconfig/example2/internal/gconfig"
+	"github.com/apopov-app/ggconfig/example2/internal/server"
 )
 
 func main() {
-	yamlData, err := os.ReadFile("config.yaml")
+	configPath := flag.String("config", "", "path to YAML config file (optional)")
+	flag.Parse()
+
+	log.Println("🚀 Starting example2 application (GlobalConfig)...")
+
+	// Main only reads configuration, doesn't define defaults.
+	// Defaults are defined in the packages that use them (database, server packages).
+
+	// Create GlobalConfig with sources (order matters: ENV → YAML → default)
+	// NewGlobalConfig, NewEnvConfig, NewGlobalYamlConfig are generated in gconfig package
+	global, err := gconfig.NewGlobalConfig(
+		gconfig.NewEnvConfig(func(key string) string { return key }),
+		gconfig.NewGlobalYamlConfig(*configPath),
+	)
 	if err != nil {
-		log.Fatalf("Failed to read YAML config: %v", err)
+		log.Fatalf("Failed to create GlobalConfig: %v", err)
 	}
 
-	envServer := gconfig.NewServerConfig()
-	yamlServer := gconfig.NewServerConfigYAML(yamlData)
-	server := gconfig.NewServerConfigAll(envServer, yamlServer)
+	// Get configurations from registry
+	// Each package registered with --registry gets a Get<Pkg>() method on GlobalConfig
+	dbCfg, ok := global.GetDatabase()
+	if !ok {
+		log.Fatal("database config not registered")
+	}
 
-	host := server.Host("default-host")
-	port := server.Port(8080)
-	readTimeout := server.ReadTimeout(15)
-	writeTimeout := server.WriteTimeout(15)
+	serverCfg, ok := global.GetServer()
+	if !ok {
+		log.Fatal("server config not registered")
+	}
 
-	log.Printf("Server via composite config → host=%s port=%d readTimeout=%d writeTimeout=%d", host, port, readTimeout, writeTimeout)
+	// Packages handle defaults internally
+	dbConn, err := database.NewFromConfig(dbCfg)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	log.Printf("✅ Database connected: %s", dbConn.GetDSN())
+	defer dbConn.Close()
+
+	_, addr, err := server.NewFromConfig(serverCfg)
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+	log.Printf("✅ Server configured: %s", addr)
+
+	log.Println("\n🎉 Example2 completed successfully!")
+	log.Println("(Server not started in example, but configuration is ready)")
 }

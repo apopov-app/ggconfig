@@ -5,168 +5,150 @@ package db
 import (
 	"os"
 	
-	"gopkg.in/yaml.v3"
+	"github.com/apopov-app/ggconfig/runtime"
 )
 
 // ===== ENV Implementation =====
 
-type dbEnvConfig struct{}
-
-
-func (c *dbEnvConfig) Host(defaultValue string) string {
-	if value := os.Getenv("DB_HOST"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *dbEnvConfig) Port(defaultValue string) string {
-	if value := os.Getenv("DB_PORT"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *dbEnvConfig) User(defaultValue string) string {
-	if value := os.Getenv("DB_USER"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *dbEnvConfig) Password(defaultValue string) string {
-	if value := os.Getenv("DB_PASSWORD"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *dbEnvConfig) Name(defaultValue string) string {
-	if value := os.Getenv("DB_NAME"); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func (c *dbEnvConfig) SSLMode(defaultValue string) string {
-	if value := os.Getenv("DB_SSL_MODE"); value != "" {
-		return value
-	}
-	return defaultValue
+type dbEnvConfig struct{
+	mapKey func(string) string
 }
 
 
-func NewConfigDbConfig() *dbEnvConfig {
-	return &dbEnvConfig{}
+func (c *dbEnvConfig) Host(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DB_HOST")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *dbEnvConfig) Port(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DB_PORT")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *dbEnvConfig) User(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DB_USER")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *dbEnvConfig) Password(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DB_PASSWORD")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *dbEnvConfig) Name(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DB_NAME")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+func (c *dbEnvConfig) SSLMode(defaultValue string) (string, bool) {
+	if value := os.Getenv(c.mapKey("DB_SSL_MODE")); value != "" {
+		return value, true
+	}
+	return defaultValue, false
+}
+
+
+func NewDbConfigEnvConfig() *dbEnvConfig {
+	return NewDbConfigEnvConfigWithMap(nil)
+}
+
+func NewDbConfigEnvConfigWithMap(mapKey func(string) string) *dbEnvConfig {
+	if mapKey == nil {
+		mapKey = func(k string) string { return k }
+	}
+	return &dbEnvConfig{mapKey: mapKey}
 }
 
 // ===== YAML Implementation =====
 
 type dbYAMLConfig struct {
-	data []byte
+	y *runtime.YAML
+	err error
 }
 
-func NewYAMLConfig(data []byte) *dbYAMLConfig {
+func NewDbConfigYAMLConfig(path string) *dbYAMLConfig {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return &dbYAMLConfig{y: &runtime.YAML{}, err: err}
+	}
+	y, err := runtime.ParseYAML(b)
+	if err != nil {
+		return &dbYAMLConfig{y: &runtime.YAML{}, err: err}
+	}
+	return &dbYAMLConfig{y: y}
+}
+
+func NewDbConfigYAMLConfigParsed(y *runtime.YAML) *dbYAMLConfig {
 	return &dbYAMLConfig{
-		data: data,
+		y: y,
 	}
 }
 
+func (c *dbYAMLConfig) Err() error { return c.err }
 
-func (c *dbYAMLConfig) Host(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
+
+func (c *dbYAMLConfig) Host(defaultValue string) (string, bool) {
+	// Алиасные секции
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "host"); ok {
+		return v, true
 	}
-	
-	// Читаем секцию db
-	if section, ok := config["db"].(map[string]interface{}); ok {
-		if value, ok := section["host"].(string); ok {
-			return value
-		}
-	}
-	
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *dbYAMLConfig) Port(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
+func (c *dbYAMLConfig) Port(defaultValue string) (string, bool) {
+	// Алиасные секции
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "port"); ok {
+		return v, true
 	}
-	
-	// Читаем секцию db
-	if section, ok := config["db"].(map[string]interface{}); ok {
-		if value, ok := section["port"].(string); ok {
-			return value
-		}
-	}
-	
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *dbYAMLConfig) User(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
+func (c *dbYAMLConfig) User(defaultValue string) (string, bool) {
+	// Алиасные секции
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "user"); ok {
+		return v, true
 	}
-	
-	// Читаем секцию db
-	if section, ok := config["db"].(map[string]interface{}); ok {
-		if value, ok := section["user"].(string); ok {
-			return value
-		}
-	}
-	
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *dbYAMLConfig) Password(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
+func (c *dbYAMLConfig) Password(defaultValue string) (string, bool) {
+	// Алиасные секции
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "password"); ok {
+		return v, true
 	}
-	
-	// Читаем секцию db
-	if section, ok := config["db"].(map[string]interface{}); ok {
-		if value, ok := section["password"].(string); ok {
-			return value
-		}
-	}
-	
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *dbYAMLConfig) Name(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
+func (c *dbYAMLConfig) Name(defaultValue string) (string, bool) {
+	// Алиасные секции
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "name"); ok {
+		return v, true
 	}
-	
-	// Читаем секцию db
-	if section, ok := config["db"].(map[string]interface{}); ok {
-		if value, ok := section["name"].(string); ok {
-			return value
-		}
-	}
-	
-	return defaultValue
+	return defaultValue, false
 }
 
-func (c *dbYAMLConfig) SSLMode(defaultValue string) string {
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(c.data, &config); err != nil {
-		return defaultValue
+func (c *dbYAMLConfig) SSLMode(defaultValue string) (string, bool) {
+	// Алиасные секции
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "sslmode"); ok {
+		return v, true
 	}
-	
-	// Читаем секцию db
-	if section, ok := config["db"].(map[string]interface{}); ok {
-		if value, ok := section["sslmode"].(string); ok {
-			return value
-		}
-	}
-	
-	return defaultValue
+	return defaultValue, false
 }
 
 
@@ -175,31 +157,119 @@ func (c *dbYAMLConfig) SSLMode(defaultValue string) string {
 type dbMockConfig struct{}
 
 
-func (c *dbMockConfig) Host(defaultValue string) string {
-	return defaultValue
+func (c *dbMockConfig) Host(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *dbMockConfig) Port(defaultValue string) string {
-	return defaultValue
+func (c *dbMockConfig) Port(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *dbMockConfig) User(defaultValue string) string {
-	return defaultValue
+func (c *dbMockConfig) User(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *dbMockConfig) Password(defaultValue string) string {
-	return defaultValue
+func (c *dbMockConfig) Password(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *dbMockConfig) Name(defaultValue string) string {
-	return defaultValue
+func (c *dbMockConfig) Name(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
-func (c *dbMockConfig) SSLMode(defaultValue string) string {
-	return defaultValue
+func (c *dbMockConfig) SSLMode(defaultValue string) (string, bool) {
+	return defaultValue, false
 }
 
 
-func NewMockDbConfig() *dbMockConfig {
+func NewDbConfigMock() *dbMockConfig {
 	return &dbMockConfig{}
 }
+
+// ===== Composite Implementation =====
+
+type dbAllConfig struct {
+	sources []interface{
+		Host(defaultValue string) (string, bool)
+		Port(defaultValue string) (string, bool)
+		User(defaultValue string) (string, bool)
+		Password(defaultValue string) (string, bool)
+		Name(defaultValue string) (string, bool)
+		SSLMode(defaultValue string) (string, bool)
+	}
+}
+
+func NewDbConfigAll(sources ...interface{
+	Host(defaultValue string) (string, bool)
+	Port(defaultValue string) (string, bool)
+	User(defaultValue string) (string, bool)
+	Password(defaultValue string) (string, bool)
+	Name(defaultValue string) (string, bool)
+	SSLMode(defaultValue string) (string, bool)
+}) *dbAllConfig {
+	return &dbAllConfig{sources: sources}
+}
+
+
+func (c *dbAllConfig) Host(defaultValue string) (string, bool) {
+	for _, s := range c.sources {
+		v, ok := s.Host(defaultValue)
+		if ok {
+			return v, true
+		}
+	}
+	return defaultValue, false
+}
+
+func (c *dbAllConfig) Port(defaultValue string) (string, bool) {
+	for _, s := range c.sources {
+		v, ok := s.Port(defaultValue)
+		if ok {
+			return v, true
+		}
+	}
+	return defaultValue, false
+}
+
+func (c *dbAllConfig) User(defaultValue string) (string, bool) {
+	for _, s := range c.sources {
+		v, ok := s.User(defaultValue)
+		if ok {
+			return v, true
+		}
+	}
+	return defaultValue, false
+}
+
+func (c *dbAllConfig) Password(defaultValue string) (string, bool) {
+	for _, s := range c.sources {
+		v, ok := s.Password(defaultValue)
+		if ok {
+			return v, true
+		}
+	}
+	return defaultValue, false
+}
+
+func (c *dbAllConfig) Name(defaultValue string) (string, bool) {
+	for _, s := range c.sources {
+		v, ok := s.Name(defaultValue)
+		if ok {
+			return v, true
+		}
+	}
+	return defaultValue, false
+}
+
+func (c *dbAllConfig) SSLMode(defaultValue string) (string, bool) {
+	for _, s := range c.sources {
+		v, ok := s.SSLMode(defaultValue)
+		if ok {
+			return v, true
+		}
+	}
+	return defaultValue, false
+}
+
+
+
