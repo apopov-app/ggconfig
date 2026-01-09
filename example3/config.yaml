@@ -1,0 +1,10 @@
+# Example configuration for example3
+# Both servers use auto-generated unique names based on path
+
+cmd_Abin_internal_server:
+  host: "0.0.0.0"
+  port: 8080
+
+cmd_Bbin_internal_server:
+  host: "0.0.0.0"
+  port: 8081

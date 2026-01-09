@@ -21,9 +21,10 @@ type Method struct {
 }
 
 type InterfaceInfo struct {
-	PackageName   string
-	InterfaceName string
-	Methods       []Method
+	PackageName       string // Оригинальное имя пакета (для обратной совместимости)
+	UniquePackageName string // Уникальное имя на основе пути
+	InterfaceName     string
+	Methods           []Method
 }
 
 // Настройки алиасов, передаваемые через --alias
@@ -53,6 +54,7 @@ func main() {
 	outputPath := flag.String("output", "", "output directory path")
 	examplePath := flag.String("example", "", "generate example config file")
 	registryEnabled := flag.Bool("registry", false, "enable global registry: generates registry.gen.go in output package and init() self-registration in each generated file")
+	packageNameOverride := flag.String("name", "", "override package name for generation (default: auto-detect from path)")
 	var aliasFlags aliasFlag
 	flag.Var(&aliasFlags, "alias", "alias mapping: env.<Method>=ALIAS1,ALIAS2 | yaml.section=ALIAS1,ALIAS2 | yaml.key.<Method>=ALIAS1,ALIAS2")
 	flag.Parse()
@@ -63,8 +65,30 @@ func main() {
 		log.Fatalf("failed to get current directory: %v", err)
 	}
 
+	var uniquePackageName string
 	packageName := filepath.Base(currentDir)
-	fmt.Printf("Auto-detected package: %s\n", packageName)
+
+	if *packageNameOverride != "" {
+		// Используем имя, заданное вручную
+		uniquePackageName = *packageNameOverride
+		fmt.Printf("Using package name: %s\n", uniquePackageName)
+	} else {
+		// Находим корень модуля Go и вычисляем уникальное имя пакета
+		moduleRoot, err := findModuleRoot(currentDir)
+		if err != nil {
+			log.Fatalf("failed to find module root: %v", err)
+		}
+
+		// Вычисляем относительный путь от корня модуля до текущего пакета
+		relPath, err := filepath.Rel(moduleRoot, currentDir)
+		if err != nil {
+			log.Fatalf("failed to compute relative path: %v", err)
+		}
+
+		// Преобразуем путь в уникальное имя (заменяем / на _)
+		uniquePackageName = pathToUniqueName(relPath)
+		fmt.Printf("Auto-detected package: %s (unique: %s)\n", packageName, uniquePackageName)
+	}
 
 	if interfaceName == nil || *interfaceName == "" {
 		log.Fatalf("interface name is required")
@@ -72,7 +96,7 @@ func main() {
 	fmt.Printf("Generating config for package: %s, interface: %s\n", packageName, *interfaceName)
 
 	// Парсим интерфейс
-	info, err := parseInterface(packageName, *interfaceName)
+	info, err := parseInterface(packageName, uniquePackageName, *interfaceName)
 	if err != nil {
 		log.Fatalf("failed to parse interface: %v", err)
 	}
@@ -101,10 +125,10 @@ func main() {
 	if outputDisplayPath == "" {
 		outputDisplayPath = "current package"
 	}
-	fmt.Printf("✅ Generated config for %s.%s in %s\n", info.PackageName, info.InterfaceName, outputDisplayPath)
+	fmt.Printf("✅ Generated config for %s.%s in %s\n", info.UniquePackageName, info.InterfaceName, outputDisplayPath)
 }
 
-func parseInterface(packageName, interfaceName string) (*InterfaceInfo, error) {
+func parseInterface(packageName, uniquePackageName, interfaceName string) (*InterfaceInfo, error) {
 	// Парсим весь пакет - путь относительно папки с директивой
 	packagePath := filepath.Join("..", packageName)
 
@@ -161,10 +185,54 @@ func parseInterface(packageName, interfaceName string) (*InterfaceInfo, error) {
 	}
 
 	return &InterfaceInfo{
-		PackageName:   packageName,
-		InterfaceName: interfaceName,
-		Methods:       methods,
+		PackageName:       packageName,
+		UniquePackageName: uniquePackageName,
+		InterfaceName:     interfaceName,
+		Methods:           methods,
 	}, nil
+}
+
+// findModuleRoot находит корень модуля Go, ища go.mod файл
+func findModuleRoot(startDir string) (string, error) {
+	dir := startDir
+	for {
+		goModPath := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Дошли до корня файловой системы
+			return "", fmt.Errorf("go.mod not found from %s", startDir)
+		}
+		dir = parent
+	}
+}
+
+// pathToUniqueName преобразует путь в уникальное имя, заменяя / на _
+func pathToUniqueName(path string) string {
+	// Нормализуем путь (убираем ./ в начале)
+	path = strings.TrimPrefix(path, "./")
+	path = strings.TrimPrefix(path, ".")
+
+	// Заменяем все разделители на _
+	path = strings.ReplaceAll(path, string(filepath.Separator), "_")
+	path = strings.ReplaceAll(path, "/", "_")
+
+	// Убираем повторяющиеся подчеркивания
+	for strings.Contains(path, "__") {
+		path = strings.ReplaceAll(path, "__", "_")
+	}
+
+	// Убираем подчеркивания в начале и конце
+	path = strings.Trim(path, "_")
+
+	// Если путь пустой (корень модуля), используем "root"
+	if path == "" {
+		path = "root"
+	}
+
+	return path
 }
 
 func getReturnTypes(funcType *ast.FuncType) []string {
@@ -319,7 +387,7 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 	if outputPath == "" {
 		// По умолчанию - создаем в текущем пакете
 		fullOutputPath = "."
-		packageName = info.PackageName
+		packageName = info.UniquePackageName
 		isSamePackage = true
 	} else {
 		// Пользователь указал свой путь
@@ -340,7 +408,8 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 	}
 
 	// Генерируем один файл со всеми реализациями
-	fileName := fmt.Sprintf("%s.gen.go", info.PackageName)
+	// Используем уникальное имя для избежания конфликтов
+	fileName := fmt.Sprintf("%s.gen.go", info.UniquePackageName)
 	filePath := filepath.Join(fullOutputPath, fileName)
 
 	file, err := os.Create(filePath)
@@ -351,8 +420,18 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 
 	// Шаблон для генерации всех реализаций
 	tmpl := template.Must(template.New("config").Funcs(template.FuncMap{
-		"title":  strings.Title,
-		"envKey": func(methodName string) string { return getEnvKey(info.PackageName, methodName) },
+		"title": func(s string) string {
+			// Убираем подчеркивания и применяем Title к каждой части
+			parts := strings.Split(s, "_")
+			var result strings.Builder
+			for _, part := range parts {
+				if len(part) > 0 {
+					result.WriteString(strings.Title(part))
+				}
+			}
+			return result.String()
+		},
+		"envKey": func(methodName string) string { return getEnvKey(info.UniquePackageName, methodName) },
 		// Проверка ENV по ключу без возврата default
 		"envCheck": func(returnType, key string) string { return getEnvCheckSnippet(key, returnType) },
 		// Возврат ENV по основному ключу с fallback на default
@@ -399,19 +478,19 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 	}).Parse(unifiedTemplate))
 
 	data := struct {
-		PackageName    string
-		InterfaceName  string
-		Methods        []Method
-		GenPackageName string
-		IsSamePackage  bool
-		EnableRegistry bool
+		UniquePackageName string // Уникальное имя на основе пути
+		InterfaceName     string
+		Methods           []Method
+		GenPackageName    string
+		IsSamePackage     bool
+		EnableRegistry    bool
 	}{
-		PackageName:    info.PackageName,
-		InterfaceName:  info.InterfaceName,
-		Methods:        info.Methods,
-		GenPackageName: packageName,
-		IsSamePackage:  isSamePackage,
-		EnableRegistry: registryEnabled,
+		UniquePackageName: info.UniquePackageName,
+		InterfaceName:     info.InterfaceName,
+		Methods:           info.Methods,
+		GenPackageName:    packageName,
+		IsSamePackage:     isSamePackage,
+		EnableRegistry:    registryEnabled,
 	}
 
 	return tmpl.Execute(file, data)
@@ -566,7 +645,7 @@ func generateExampleConfig(info *InterfaceInfo, examplePath string) error {
 	}
 
 	// Генерируем файл с именованием originalfile.yaml.go
-	fileName := fmt.Sprintf("%s_example.yaml", info.PackageName)
+	fileName := fmt.Sprintf("%s_example.yaml", info.UniquePackageName)
 	filePath := filepath.Join(fullOutputPath, fileName)
 
 	file, err := os.Create(filePath)
@@ -577,8 +656,18 @@ func generateExampleConfig(info *InterfaceInfo, examplePath string) error {
 
 	// Шаблон для генерации моков
 	tmpl := template.Must(template.New("example").Funcs(template.FuncMap{
-		"title":  strings.Title,
-		"envKey": func(methodName string) string { return getEnvKey(info.PackageName, methodName) },
+		"title": func(s string) string {
+			// Убираем подчеркивания и применяем Title к каждой части
+			parts := strings.Split(s, "_")
+			var result strings.Builder
+			for _, part := range parts {
+				if len(part) > 0 {
+					result.WriteString(strings.Title(part))
+				}
+			}
+			return result.String()
+		},
+		"envKey": func(methodName string) string { return getEnvKey(info.UniquePackageName, methodName) },
 		"defaultValue": func(paramType string) string {
 			switch paramType {
 			case "string":
@@ -592,13 +681,13 @@ func generateExampleConfig(info *InterfaceInfo, examplePath string) error {
 	}).Parse(exampleTemplate))
 
 	data := struct {
-		PackageName   string
-		InterfaceName string
-		Methods       []Method
+		UniquePackageName string
+		InterfaceName     string
+		Methods           []Method
 	}{
-		PackageName:   info.PackageName,
-		InterfaceName: info.InterfaceName,
-		Methods:       info.Methods,
+		UniquePackageName: info.UniquePackageName,
+		InterfaceName:     info.InterfaceName,
+		Methods:           info.Methods,
 	}
 
 	return tmpl.Execute(file, data)
@@ -651,12 +740,12 @@ import (
 
 // ===== ENV Implementation =====
 
-type {{.PackageName}}EnvConfig struct{
+type {{.UniquePackageName}}EnvConfig struct{
 	mapKey func(string) string
 }
 
 {{range .Methods}}
-func (c *{{$.PackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
 	{{- $ret := .ReturnType -}}
 	{{- range envAliasKeys .Name}}
 	{{envCheck $ret (printf "c.mapKey(%q)" .)}}
@@ -665,46 +754,46 @@ func (c *{{$.PackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.
 }
 {{end}}
 
-func New{{.PackageName | title}}{{.InterfaceName | title}}EnvConfig() *{{.PackageName}}EnvConfig {
-	return New{{.PackageName | title}}{{.InterfaceName | title}}EnvConfigWithMap(nil)
+func New{{.UniquePackageName | title}}{{.InterfaceName | title}}EnvConfig() *{{.UniquePackageName}}EnvConfig {
+	return New{{.UniquePackageName | title}}{{.InterfaceName | title}}EnvConfigWithMap(nil)
 }
 
-func New{{.PackageName | title}}{{.InterfaceName | title}}EnvConfigWithMap(mapKey func(string) string) *{{.PackageName}}EnvConfig {
+func New{{.UniquePackageName | title}}{{.InterfaceName | title}}EnvConfigWithMap(mapKey func(string) string) *{{.UniquePackageName}}EnvConfig {
 	if mapKey == nil {
 		mapKey = func(k string) string { return k }
 	}
-	return &{{.PackageName}}EnvConfig{mapKey: mapKey}
+	return &{{.UniquePackageName}}EnvConfig{mapKey: mapKey}
 }
 
 // ===== YAML Implementation =====
 
-type {{.PackageName}}YAMLConfig struct {
+type {{.UniquePackageName}}YAMLConfig struct {
 	y *runtime.YAML
 	err error
 }
 
-func New{{.PackageName | title}}{{.InterfaceName | title}}YAMLConfig(path string) *{{.PackageName}}YAMLConfig {
+func New{{.UniquePackageName | title}}{{.InterfaceName | title}}YAMLConfig(path string) *{{.UniquePackageName}}YAMLConfig {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return &{{.PackageName}}YAMLConfig{y: &runtime.YAML{}, err: err}
+		return &{{.UniquePackageName}}YAMLConfig{y: &runtime.YAML{}, err: err}
 	}
 	y, err := runtime.ParseYAML(b)
 	if err != nil {
-		return &{{.PackageName}}YAMLConfig{y: &runtime.YAML{}, err: err}
+		return &{{.UniquePackageName}}YAMLConfig{y: &runtime.YAML{}, err: err}
 	}
-	return &{{.PackageName}}YAMLConfig{y: y}
+	return &{{.UniquePackageName}}YAMLConfig{y: y}
 }
 
-func New{{.PackageName | title}}{{.InterfaceName | title}}YAMLConfigParsed(y *runtime.YAML) *{{.PackageName}}YAMLConfig {
-	return &{{.PackageName}}YAMLConfig{
+func New{{.UniquePackageName | title}}{{.InterfaceName | title}}YAMLConfigParsed(y *runtime.YAML) *{{.UniquePackageName}}YAMLConfig {
+	return &{{.UniquePackageName}}YAMLConfig{
 		y: y,
 	}
 }
 
-func (c *{{.PackageName}}YAMLConfig) Err() error { return c.err }
+func (c *{{.UniquePackageName}}YAMLConfig) Err() error { return c.err }
 
 {{range .Methods}}
-func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
 	{{- $methodName := .Name -}}
 	{{- $keyPrimary := (.Name | toLower) -}}
 	{{- if eq .ReturnType "int" }}
@@ -715,8 +804,8 @@ func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{
 		return v, true
 		}
 		{{- end}}
-	// Основная секция {{$.PackageName}}
-	if v, ok := c.y.GetInt("{{$.PackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
+	// Основная секция {{$.UniquePackageName}}
+	if v, ok := c.y.GetInt("{{$.UniquePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
 	}
 	return defaultValue, false
@@ -728,8 +817,8 @@ func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{
 		return v, true
 	}
 	{{- end}}
-	// Основная секция {{$.PackageName}}
-	if v, ok := c.y.GetString("{{$.PackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
+	// Основная секция {{$.UniquePackageName}}
+	if v, ok := c.y.GetString("{{$.UniquePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -739,21 +828,21 @@ func (c *{{$.PackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{
 
 // ===== Mock Implementation =====
 
-type {{.PackageName}}MockConfig struct{}
+type {{.UniquePackageName}}MockConfig struct{}
 
 {{range .Methods}}
-func (c *{{$.PackageName}}MockConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}MockConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
 	return defaultValue, false
 }
 {{end}}
 
-func New{{.PackageName | title}}{{.InterfaceName | title}}Mock() *{{.PackageName}}MockConfig {
-	return &{{.PackageName}}MockConfig{}
+func New{{.UniquePackageName | title}}{{.InterfaceName | title}}Mock() *{{.UniquePackageName}}MockConfig {
+	return &{{.UniquePackageName}}MockConfig{}
 }
 
 // ===== Composite Implementation =====
 
-type {{.PackageName}}AllConfig struct {
+type {{.UniquePackageName}}AllConfig struct {
 	sources []interface{
 		{{- range .Methods}}
 		{{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool)
@@ -761,16 +850,16 @@ type {{.PackageName}}AllConfig struct {
 	}
 }
 
-func New{{.PackageName | title}}{{.InterfaceName | title}}All(sources ...interface{
+func New{{.UniquePackageName | title}}{{.InterfaceName | title}}All(sources ...interface{
 	{{- range .Methods}}
 	{{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool)
 	{{- end}}
-}) *{{.PackageName}}AllConfig {
-	return &{{.PackageName}}AllConfig{sources: sources}
+}) *{{.UniquePackageName}}AllConfig {
+	return &{{.UniquePackageName}}AllConfig{sources: sources}
 }
 
 {{range .Methods}}
-func (c *{{$.PackageName}}AllConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}AllConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
 	for _, s := range c.sources {
 		v, ok := s.{{.Name}}(defaultValue)
 		if ok {
@@ -783,36 +872,36 @@ func (c *{{$.PackageName}}AllConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.
 
 {{if .EnableRegistry}}
 func init() {
-	Register("{{.PackageName}}", Provider{
-		Package: "{{.PackageName}}",
+	Register("{{.UniquePackageName}}", Provider{
+		Package: "{{.UniquePackageName}}",
 		NewAllFromParsed: func(y *runtime.YAML, mapKey func(string) string) any {
-			envCfg := New{{.PackageName | title}}{{.InterfaceName | title}}EnvConfigWithMap(mapKey)
-			yamlCfg := New{{.PackageName | title}}{{.InterfaceName | title}}YAMLConfigParsed(y)
-			return New{{.PackageName | title}}{{.InterfaceName | title}}All(envCfg, yamlCfg)
+			envCfg := New{{.UniquePackageName | title}}{{.InterfaceName | title}}EnvConfigWithMap(mapKey)
+			yamlCfg := New{{.UniquePackageName | title}}{{.InterfaceName | title}}YAMLConfigParsed(y)
+			return New{{.UniquePackageName | title}}{{.InterfaceName | title}}All(envCfg, yamlCfg)
 		},
 	})
 }
 
-// Get{{.PackageName | title}} returns the concrete AllConfig type for this package.
+// Get{{.UniquePackageName | title}} returns the concrete AllConfig type for this package.
 // It can be passed anywhere the original interface is expected (structural typing).
-func (g *GlobalConfig) Get{{.PackageName | title}}() (*{{.PackageName}}AllConfig, bool) {
+func (g *GlobalConfig) Get{{.UniquePackageName | title}}() (*{{.UniquePackageName}}AllConfig, bool) {
 	registryMu.RLock()
-	p, ok := registry["{{.PackageName}}"]
+	p, ok := registry["{{.UniquePackageName}}"]
 	registryMu.RUnlock()
 	if !ok || p.NewAllFromParsed == nil {
 		return nil, false
 	}
 	v := p.NewAllFromParsed(g.y, g.mapKey)
-	cfg, ok := v.(*{{.PackageName}}AllConfig)
+	cfg, ok := v.(*{{.UniquePackageName}}AllConfig)
 	return cfg, ok
 }
 {{end}}
 `
 
-const exampleTemplate = `# Example configuration for {{.PackageName}} package
+const exampleTemplate = `# Example configuration for {{.UniquePackageName}} package
 # Copy this file to config.yaml or use with your application
 
-{{.PackageName}}:
+{{.UniquePackageName}}:
 {{range .Methods}}  # {{.Name}} - {{.ParamType}} parameter{{if .Comment}} - {{.Comment}}{{end}}
   {{.Name}}: {{.ParamType | defaultValue}}
 {{end}}
