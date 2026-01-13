@@ -1,0 +1,19 @@
+internal_server:
+  host: "0.0.0.0"
+  port: 8080
+  realms:
+    - id: "realm-dev-1"
+      clientHost: "localhost"
+      clientPort: 8080
+      regions: ["en", "ru"]
+      version: "dev"
+    - id: "realm-prod-1"
+      clientHost: "api.example.com"
+      clientPort: 443
+      regions: ["en", "ru", "de", "fr"]
+      version: "v1.2.3"
+    - id: "realm-staging-1"
+      clientHost: "staging.example.com"
+      clientPort: 8443
+      regions: ["en"]
+      version: "v1.2.3-rc.1"

@@ -18,13 +18,17 @@ type Method struct {
 	ParamType  string
 	ReturnType string // value type (first return value)
 	Comment    string // Добавляем поле для комментария
+	IsSlice    bool   // Является ли возвращаемый тип массивом
+	ElemType   string // Тип элемента массива (если IsSlice == true)
 }
 
 type InterfaceInfo struct {
-	PackageName       string // Оригинальное имя пакета (для обратной совместимости)
-	UniquePackageName string // Уникальное имя на основе пути
+	PackageName       string   // Оригинальное имя пакета (для обратной совместимости)
+	UniquePackageName string   // Уникальное имя на основе пути
 	InterfaceName     string
 	Methods           []Method
+	ImportPath        string   // Путь для импорта пакета (если генерация в другой пакет)
+	NeedImport        bool     // Нужен ли импорт оригинального пакета
 }
 
 // Настройки алиасов, передаваемые через --alias
@@ -109,6 +113,46 @@ func main() {
 		fmt.Printf("  - %s(%s) (%s, bool)\n", method.Name, method.ParamType, method.ReturnType)
 	}
 
+	// Определяем, нужно ли добавлять импорт
+	if *outputPath != "" {
+		// Проверяем, есть ли кастомные типы (не string, не int)
+		hasCustomTypes := false
+		for _, method := range info.Methods {
+			// Проверяем тип параметра
+			if method.ParamType != "string" && method.ParamType != "int" && method.ParamType != "" {
+				if !strings.HasPrefix(method.ParamType, "[]string") && !strings.HasPrefix(method.ParamType, "[]int") {
+					hasCustomTypes = true
+					break
+				}
+			}
+			// Проверяем тип возвращаемого значения
+			if method.ReturnType != "string" && method.ReturnType != "int" && method.ReturnType != "" {
+				if !strings.HasPrefix(method.ReturnType, "[]string") && !strings.HasPrefix(method.ReturnType, "[]int") {
+					hasCustomTypes = true
+					break
+				}
+			}
+		}
+		
+		if hasCustomTypes {
+			// Генерация в другой пакет - нужен импорт
+			info.NeedImport = true
+			// Вычисляем import path
+			moduleRoot, err := findModuleRoot(currentDir)
+			if err == nil {
+				moduleName, err := getModuleName(moduleRoot)
+				if err == nil {
+					relPath, err := filepath.Rel(moduleRoot, currentDir)
+					if err == nil && relPath != "." {
+						info.ImportPath = filepath.Join(moduleName, relPath)
+					} else {
+						info.ImportPath = moduleName
+					}
+				}
+			}
+		}
+	}
+
 	// Генерируем все реализации в одном файле
 	if err := generateImplementation(info, aliasSettings, *outputPath, *registryEnabled); err != nil {
 		log.Fatalf("failed to generate implementation: %v", err)
@@ -129,8 +173,8 @@ func main() {
 }
 
 func parseInterface(packageName, uniquePackageName, interfaceName string) (*InterfaceInfo, error) {
-	// Парсим весь пакет - путь относительно папки с директивой
-	packagePath := filepath.Join("..", packageName)
+	// Парсим текущую директорию (где находится go:generate директива)
+	packagePath := "."
 
 	fmt.Printf("Parsing package: %s\n", packagePath)
 
@@ -164,11 +208,20 @@ func parseInterface(packageName, uniquePackageName, interfaceName string) (*Inte
 										comment = strings.TrimSpace(strings.TrimPrefix(method.Doc.List[0].Text, "//"))
 									}
 
+									// Определяем, является ли тип массивом
+									isSlice := strings.HasPrefix(returnType, "[]")
+									elemType := ""
+									if isSlice {
+										elemType = strings.TrimPrefix(returnType, "[]")
+									}
+
 									methods = append(methods, Method{
 										Name:       methodName,
 										ParamType:  paramType,
 										ReturnType: returnType,
 										Comment:    comment,
+										IsSlice:    isSlice,
+										ElemType:   elemType,
 									})
 								}
 							}
@@ -209,6 +262,24 @@ func findModuleRoot(startDir string) (string, error) {
 	}
 }
 
+// getModuleName читает имя модуля из go.mod
+func getModuleName(moduleRoot string) (string, error) {
+	goModPath := filepath.Join(moduleRoot, "go.mod")
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		return "", err
+	}
+	
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "module ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "module ")), nil
+		}
+	}
+	return "", fmt.Errorf("module name not found in %s", goModPath)
+}
+
 // pathToUniqueName преобразует путь в уникальное имя, заменяя / на _
 func pathToUniqueName(path string) string {
 	// Нормализуем путь (убираем ./ в начале)
@@ -235,18 +306,45 @@ func pathToUniqueName(path string) string {
 	return path
 }
 
-func getReturnTypes(funcType *ast.FuncType) []string {
+type ReturnTypeInfo struct {
+	TypeName string
+	IsSlice  bool
+	ElemType string
+}
+
+func getTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		// For qualified types like pkg.Type
+		return fmt.Sprintf("%s.%s", getTypeName(t.X), t.Sel.Name)
+	case *ast.ArrayType:
+		return "[]" + getTypeName(t.Elt)
+	case *ast.StarExpr:
+		return "*" + getTypeName(t.X)
+	default:
+		return ""
+	}
+}
+
+func getReturnTypes(funcType *ast.FuncType) []ReturnTypeInfo {
 	if funcType.Results == nil || len(funcType.Results.List) == 0 {
 		return nil
 	}
-	var out []string
+	var out []ReturnTypeInfo
 	for _, r := range funcType.Results.List {
-		ident, ok := r.Type.(*ast.Ident)
-		if !ok {
-			out = append(out, "")
-			continue
+		typeName := getTypeName(r.Type)
+		isSlice := strings.HasPrefix(typeName, "[]")
+		elemType := ""
+		if isSlice {
+			elemType = strings.TrimPrefix(typeName, "[]")
 		}
-		out = append(out, ident.Name)
+		out = append(out, ReturnTypeInfo{
+			TypeName: typeName,
+			IsSlice:  isSlice,
+			ElemType: elemType,
+		})
 	}
 	return out
 }
@@ -360,22 +458,24 @@ func getMethodSignature(funcType *ast.FuncType) (string, string, error) {
 	// Получаем тип параметра (для простоты берем первый)
 	var paramType string
 	if funcType.Params != nil && len(funcType.Params.List) > 0 {
-		if ident, ok := funcType.Params.List[0].Type.(*ast.Ident); ok {
-			paramType = ident.Name
-		}
+		paramType = getTypeName(funcType.Params.List[0].Type)
 	}
 
 	rets := getReturnTypes(funcType)
 	if len(rets) != 2 {
 		return "", "", fmt.Errorf("expected 2 return values (T, bool), got %d", len(rets))
 	}
-	if rets[1] != "bool" {
-		return "", "", fmt.Errorf("second return value must be bool, got %q", rets[1])
+	if rets[1].TypeName != "bool" {
+		return "", "", fmt.Errorf("second return value must be bool, got %q", rets[1].TypeName)
 	}
-	if rets[0] != "string" && rets[0] != "int" {
-		return "", "", fmt.Errorf("unsupported value return type %q (supported: string, int)", rets[0])
+	// Разрешаем: string, int, []Type
+	if rets[0].TypeName == "" {
+		return "", "", fmt.Errorf("could not parse return type")
 	}
-	return paramType, rets[0], nil
+	if !rets[0].IsSlice && rets[0].TypeName != "string" && rets[0].TypeName != "int" {
+		return "", "", fmt.Errorf("unsupported value return type %q (supported: string, int, []Type)", rets[0].TypeName)
+	}
+	return paramType, rets[0].TypeName, nil
 }
 
 func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPath string, registryEnabled bool) error {
@@ -387,7 +487,7 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 	if outputPath == "" {
 		// По умолчанию - создаем в текущем пакете
 		fullOutputPath = "."
-		packageName = info.UniquePackageName
+		packageName = info.PackageName
 		isSamePackage = true
 	} else {
 		// Пользователь указал свой путь
@@ -444,6 +544,44 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 			}
 			return false
 		},
+		"hasSliceType": func(methods []Method) bool {
+			for _, method := range methods {
+				if method.IsSlice {
+					return true
+				}
+			}
+			return false
+		},
+		"isSlice": func(m Method) bool {
+			return m.IsSlice
+		},
+		"baseType": func(returnType string) string {
+			if strings.HasPrefix(returnType, "[]") {
+				return strings.TrimPrefix(returnType, "[]")
+			}
+			return returnType
+		},
+		"qualifyType": func(typeName string, needImport bool, pkgName string) string {
+			// Если тип не примитивный и нужен импорт, добавляем префикс пакета
+			if !needImport {
+				return typeName
+			}
+			// Проверяем, является ли тип примитивным
+			if typeName == "string" || typeName == "int" || typeName == "bool" || 
+			   typeName == "int64" || typeName == "float64" {
+				return typeName
+			}
+			// Если это слайс, обрабатываем элемент
+			if strings.HasPrefix(typeName, "[]") {
+				elemType := strings.TrimPrefix(typeName, "[]")
+				if elemType == "string" || elemType == "int" || elemType == "bool" {
+					return typeName
+				}
+				return "[]" + pkgName + "." + elemType
+			}
+			// Добавляем префикс пакета
+			return pkgName + "." + typeName
+		},
 		"toLower": strings.ToLower,
 		// Алиасы
 		"envAliasKeys": func(methodName string) []string {
@@ -468,6 +606,9 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 			}
 		},
 		"paramDefaultLiteral": func(paramType string) string {
+			if strings.HasPrefix(paramType, "[]") {
+				return "nil"
+			}
 			switch paramType {
 			case "int":
 				return "0"
@@ -484,6 +625,9 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 		GenPackageName    string
 		IsSamePackage     bool
 		EnableRegistry    bool
+		NeedImport        bool
+		ImportPath        string
+		SourcePackageName string // Имя исходного пакета для квалификации типов
 	}{
 		UniquePackageName: info.UniquePackageName,
 		InterfaceName:     info.InterfaceName,
@@ -491,6 +635,9 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 		GenPackageName:    packageName,
 		IsSamePackage:     isSamePackage,
 		EnableRegistry:    registryEnabled,
+		NeedImport:        info.NeedImport,
+		ImportPath:        info.ImportPath,
+		SourcePackageName: info.PackageName,
 	}
 
 	return tmpl.Execute(file, data)
@@ -733,9 +880,11 @@ const unifiedTemplate = `// Code generated by ggconfig. DO NOT EDIT.
 package {{.GenPackageName}}
 
 import (
+	{{if hasSliceType .Methods}}"encoding/json"{{end}}
 	"os"
 	{{if hasIntType .Methods}}"strconv"{{end}}
 	"github.com/apopov-app/ggconfig/runtime"
+	{{if .NeedImport}}{{if .ImportPath}}"{{.ImportPath}}"{{end}}{{end}}
 )
 
 // ===== ENV Implementation =====
@@ -745,12 +894,31 @@ type {{.UniquePackageName}}EnvConfig struct{
 }
 
 {{range .Methods}}
-func (c *{{$.UniquePackageName}}EnvConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}EnvConfig) {{.Name}}(defaultValue {{qualifyType .ParamType $.NeedImport $.SourcePackageName}}) ({{qualifyType .ReturnType $.NeedImport $.SourcePackageName}}, bool) {
+	{{- if isSlice . -}}
+	{{- $ret := qualifyType .ReturnType $.NeedImport $.SourcePackageName -}}
+	{{- range envAliasKeys .Name}}
+	if value := os.Getenv(c.mapKey("{{.}}")); value != "" {
+		var result {{$ret}}
+		if err := json.Unmarshal([]byte(value), &result); err == nil {
+			return result, true
+		}
+	}
+	{{- end}}
+	if value := os.Getenv(c.mapKey("{{envKey .Name}}")); value != "" {
+		var result {{$ret}}
+		if err := json.Unmarshal([]byte(value), &result); err == nil {
+			return result, true
+		}
+	}
+	return defaultValue, false
+	{{- else -}}
 	{{- $ret := .ReturnType -}}
 	{{- range envAliasKeys .Name}}
 	{{envCheck $ret (printf "c.mapKey(%q)" .)}}
 	{{- end}}
 	{{envReturn .ReturnType (printf "c.mapKey(%q)" (envKey .Name))}}
+	{{- end}}
 }
 {{end}}
 
@@ -793,10 +961,49 @@ func New{{.UniquePackageName | title}}{{.InterfaceName | title}}YAMLConfigParsed
 func (c *{{.UniquePackageName}}YAMLConfig) Err() error { return c.err }
 
 {{range .Methods}}
-func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{qualifyType .ParamType $.NeedImport $.SourcePackageName}}) ({{qualifyType .ReturnType $.NeedImport $.SourcePackageName}}, bool) {
 	{{- $methodName := .Name -}}
 	{{- $keyPrimary := (.Name | toLower) -}}
-	{{- if eq .ReturnType "int" }}
+	{{- $qualifiedReturnType := qualifyType .ReturnType $.NeedImport $.SourcePackageName -}}
+	{{- $qualifiedElemType := qualifyType (baseType .ReturnType) $.NeedImport $.SourcePackageName -}}
+	{{- if isSlice . }}
+	// Алиасные секции
+	{{- range yamlSectionAliases }}
+	{{- $section := . -}}
+	if v, ok := c.y.GetSlice("{{$section}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
+		var result {{$qualifiedReturnType}}
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				var elem {{$qualifiedElemType}}
+				data, _ := json.Marshal(m)
+				if err := json.Unmarshal(data, &elem); err == nil {
+					result = append(result, elem)
+				}
+			}
+		}
+		if len(result) > 0 {
+			return result, true
+		}
+	}
+	{{- end}}
+	// Основная секция {{$.UniquePackageName}}
+	if v, ok := c.y.GetSlice("{{$.UniquePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
+		var result {{$qualifiedReturnType}}
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				var elem {{$qualifiedElemType}}
+				data, _ := json.Marshal(m)
+				if err := json.Unmarshal(data, &elem); err == nil {
+					result = append(result, elem)
+				}
+			}
+		}
+		if len(result) > 0 {
+			return result, true
+		}
+	}
+	return defaultValue, false
+	{{- else if eq .ReturnType "int" }}
 	// Алиасные секции
 	{{- range yamlSectionAliases }}
 	{{- $section := . -}}
@@ -831,7 +1038,7 @@ func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{.ParamType}
 type {{.UniquePackageName}}MockConfig struct{}
 
 {{range .Methods}}
-func (c *{{$.UniquePackageName}}MockConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}MockConfig) {{.Name}}(defaultValue {{qualifyType .ParamType $.NeedImport $.SourcePackageName}}) ({{qualifyType .ReturnType $.NeedImport $.SourcePackageName}}, bool) {
 	return defaultValue, false
 }
 {{end}}
@@ -845,21 +1052,21 @@ func New{{.UniquePackageName | title}}{{.InterfaceName | title}}Mock() *{{.Uniqu
 type {{.UniquePackageName}}AllConfig struct {
 	sources []interface{
 		{{- range .Methods}}
-		{{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool)
+		{{.Name}}(defaultValue {{qualifyType .ParamType $.NeedImport $.SourcePackageName}}) ({{qualifyType .ReturnType $.NeedImport $.SourcePackageName}}, bool)
 		{{- end}}
 	}
 }
 
 func New{{.UniquePackageName | title}}{{.InterfaceName | title}}All(sources ...interface{
 	{{- range .Methods}}
-	{{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool)
+	{{.Name}}(defaultValue {{qualifyType .ParamType $.NeedImport $.SourcePackageName}}) ({{qualifyType .ReturnType $.NeedImport $.SourcePackageName}}, bool)
 	{{- end}}
 }) *{{.UniquePackageName}}AllConfig {
 	return &{{.UniquePackageName}}AllConfig{sources: sources}
 }
 
 {{range .Methods}}
-func (c *{{$.UniquePackageName}}AllConfig) {{.Name}}(defaultValue {{.ParamType}}) ({{.ReturnType}}, bool) {
+func (c *{{$.UniquePackageName}}AllConfig) {{.Name}}(defaultValue {{qualifyType .ParamType $.NeedImport $.SourcePackageName}}) ({{qualifyType .ReturnType $.NeedImport $.SourcePackageName}}, bool) {
 	for _, s := range c.sources {
 		v, ok := s.{{.Name}}(defaultValue)
 		if ok {

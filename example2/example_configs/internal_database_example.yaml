@@ -1,0 +1,21 @@
+# Example configuration for internal_database package
+# Copy this file to config.yaml or use with your application
+
+internal_database:
+  # Host - string parameter - Host returns database host address
+  Host: ""
+  # Port - string parameter - Port returns database port number
+  Port: ""
+  # User - string parameter - User returns database username
+  User: ""
+  # Password - string parameter - Password returns database password
+  Password: ""
+  # Name - string parameter - Name returns database name
+  Name: ""
+  # SSLMode - string parameter - SSLMode returns SSL mode configuration
+  SSLMode: ""
+
+# Usage:
+# 1. Copy this file to config.yaml
+# 2. Or use with viper/cobra for config management
+# 3. Or convert to environment variables

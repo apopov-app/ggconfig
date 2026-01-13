@@ -317,10 +317,160 @@ pgx:
 
 - `string` - строковые значения
 - `int` - целые числа (с автоматическим парсингом)
+- `[]CustomType` - массивы структур (автоматическая сериализация через JSON)
+
+### Работа с массивами структур
+
+Генератор поддерживает методы, возвращающие массивы пользовательских структур:
+
+```go
+// internal/server/config.go
+package server
+
+//go:generate ggconfig --interface=Config --output=../gconfig --registry
+
+type Config interface {
+    // Realms returns list of realm configurations
+    Realms(defaultValue []RealmInfo) ([]RealmInfo, bool)
+}
+
+type RealmInfo struct {
+    ID         string   `yaml:"id" json:"id"`
+    ClientHost string   `yaml:"clientHost" json:"clientHost"`
+    ClientPort int      `yaml:"clientPort" json:"clientPort"`
+    Regions    []string `yaml:"regions" json:"regions"`
+    Version    string   `yaml:"version" json:"version"`
+}
+```
+
+**YAML конфигурация:**
+```yaml
+internal_server:
+  realms:
+    - id: "realm-dev-1"
+      clientHost: "localhost"
+      clientPort: 8080
+      regions: ["en", "ru"]
+      version: "dev"
+    - id: "realm-prod-1"
+      clientHost: "api.example.com"
+      clientPort: 443
+      regions: ["en", "ru", "de", "fr"]
+      version: "v1.2.3"
+```
+
+**ENV конфигурация:**
+```bash
+# JSON формат для массивов в переменных окружения
+export INTERNAL_SERVER_REALMS='[{"id":"realm-dev-1","clientHost":"localhost","clientPort":8080,"regions":["en","ru"],"version":"dev"}]'
+```
+
+**Использование в коде:**
+```go
+// internal/server/server.go
+package server
+
+import "fmt"
+
+type Server struct {
+    Host   string
+    Port   int
+    Realms []RealmInfo
+}
+
+func NewFromConfig(cfg Config) (*Server, error) {
+    if cfg == nil {
+        return nil, fmt.Errorf("config is nil")
+    }
+
+    // Дефолтные значения определяются в пакете, который их использует
+    host, _ := cfg.Host("localhost")
+    port, _ := cfg.Port(8080)
+    
+    // Для массивов можно передать nil или пустой массив как default
+    realms, ok := cfg.Realms(nil)
+    if !ok {
+        // Если конфигурация не найдена, используем пустой массив
+        realms = []RealmInfo{}
+    }
+
+    return &Server{
+        Host:   host,
+        Port:   port,
+        Realms: realms,
+    }, nil
+}
+```
+
+```go
+// cmd/main.go
+package main
+
+import (
+    "log"
+    "github.com/yourproject/internal/gconfig"
+    "github.com/yourproject/internal/server"
+)
+
+func main() {
+    // Создаем глобальную конфигурацию
+    global, err := gconfig.NewGlobalConfig(
+        gconfig.NewEnvConfig(func(key string) string { return key }),
+        gconfig.NewGlobalYamlConfig("config.yaml"),
+    )
+    if err != nil {
+        log.Fatalf("Failed to create config: %v", err)
+    }
+    
+    // Получаем конфигурацию сервера
+    serverCfg, ok := global.GetInternalServer()
+    if !ok {
+        log.Fatal("server config not registered")
+    }
+    
+    // Создаем сервер с конфигурацией
+    srv, err := server.NewFromConfig(serverCfg)
+    if err != nil {
+        log.Fatalf("Failed to create server: %v", err)
+    }
+    
+    // Используем конфигурацию realms
+    log.Printf("Server configured with %d realms:\n", len(srv.Realms))
+    for _, realm := range srv.Realms {
+        log.Printf("  - %s: %s:%d (regions: %v, version: %s)\n", 
+            realm.ID, realm.ClientHost, realm.ClientPort, 
+            realm.Regions, realm.Version)
+    }
+}
+```
+
+**Примеры различных источников конфигурации:**
+
+```bash
+# 1. Из YAML файла
+go run cmd/main.go --config=config.yaml
+
+# 2. Из переменных окружения
+export INTERNAL_SERVER_REALMS='[{"id":"realm-1","clientHost":"localhost","clientPort":8080,"regions":["en"],"version":"v1.0.0"}]'
+export INTERNAL_SERVER_HOST="0.0.0.0"
+export INTERNAL_SERVER_PORT="9000"
+go run cmd/main.go
+
+# 3. Комбинированный подход (ENV переопределяет YAML)
+# Сначала читаются ENV переменные, затем YAML, затем defaults
+export INTERNAL_SERVER_PORT="9000"
+go run cmd/main.go --config=config.yaml
+```
+
+> **💡 Примечание**: 
+> - При генерации в отдельный пакет (с флагом `--output`), генератор автоматически добавляет необходимые импорты для пользовательских типов
+> - Массивы в ENV должны быть в JSON формате
+> - Структуры должны иметь теги `json` для корректной сериализации/десериализации
+> - Порядок источников в `NewGlobalConfig` важен: первый найденный источник с значением будет использован
 
 ## Пример проекта
 
-Полные примеры использования находятся в папках `example/`, `example2/` и `example3/`:
+Полные примеры использования находятся в папках `example/`, `example2/`, `example3/` и `example4/`:
 
 ### Пример 1: Генерация в том же пакете
 ```bash
@@ -350,6 +500,149 @@ go build -o bbin-app ./cmd/Bbin
 
 Демонстрирует автоматическое разрешение конфликтов: два пакета `server` в разных местах (`cmd/Abin/internal/server` и `cmd/Bbin/internal/server`) генерируются в одну папку `internal/gconfig` без конфликтов благодаря автоматически сгенерированным уникальным именам.
 
+### Пример 4: Массивы структур
+```bash
+cd example4
+go generate ./...
+go run cmd/main.go
+```
+
+Демонстрирует работу с массивами структур: конфигурация с поддержкой списка realms, где каждый realm содержит ID, хост, порт, регионы и версию. Показывает автоматическую сериализацию/десериализацию массивов пользовательских типов через JSON для ENV и прямой парсинг из YAML.
+
+## FAQ: Работа с массивами
+
+### Как валидировать массивы?
+
+```go
+func NewFromConfig(cfg Config) (*Server, error) {
+    realms, ok := cfg.Realms(nil)
+    if !ok || len(realms) == 0 {
+        return nil, fmt.Errorf("at least one realm is required")
+    }
+    
+    // Валидация каждого элемента
+    for i, realm := range realms {
+        if realm.ID == "" {
+            return nil, fmt.Errorf("realm[%d]: ID is required", i)
+        }
+        if realm.ClientPort < 1 || realm.ClientPort > 65535 {
+            return nil, fmt.Errorf("realm[%d]: invalid port %d", i, realm.ClientPort)
+        }
+    }
+    
+    return &Server{Realms: realms}, nil
+}
+```
+
+### Можно ли использовать массивы примитивных типов?
+
+Да! Поддерживаются массивы любых типов:
+
+```go
+type Config interface {
+    // Массивы примитивов
+    AllowedIPs(defaultValue []string) ([]string, bool)
+    Ports(defaultValue []int) ([]int, bool)
+    
+    // Массивы структур
+    Servers(defaultValue []ServerInfo) ([]ServerInfo, bool)
+}
+```
+
+YAML:
+```yaml
+myconfig:
+  allowedIPs: ["192.168.1.1", "10.0.0.1"]
+  ports: [8080, 8443, 9000]
+  servers:
+    - host: "server1.example.com"
+      port: 8080
+    - host: "server2.example.com"
+      port: 8443
+```
+
+### Как обновить конфигурацию без перезапуска?
+
+```go
+type Server struct {
+    cfg    Config
+    realms []RealmInfo
+    mu     sync.RWMutex
+}
+
+func (s *Server) ReloadConfig() error {
+    realms, ok := s.cfg.Realms(nil)
+    if !ok {
+        return fmt.Errorf("failed to reload realms")
+    }
+    
+    s.mu.Lock()
+    s.realms = realms
+    s.mu.Unlock()
+    
+    return nil
+}
+
+func (s *Server) GetRealms() []RealmInfo {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    
+    // Возвращаем копию для безопасности
+    result := make([]RealmInfo, len(s.realms))
+    copy(result, s.realms)
+    return result
+}
+```
+
+### Как тестировать код с массивами?
+
+Используйте Mock конфигурацию:
+
+```go
+func TestServerWithRealms(t *testing.T) {
+    // Создаем mock конфигурацию
+    mockCfg := &MockConfig{
+        realms: []server.RealmInfo{
+            {
+                ID:         "test-realm",
+                ClientHost: "localhost",
+                ClientPort: 8080,
+                Regions:    []string{"en"},
+                Version:    "test",
+            },
+        },
+    }
+    
+    srv, err := server.NewFromConfig(mockCfg)
+    if err != nil {
+        t.Fatalf("Failed to create server: %v", err)
+    }
+    
+    if len(srv.Realms) != 1 {
+        t.Errorf("Expected 1 realm, got %d", len(srv.Realms))
+    }
+}
+
+type MockConfig struct {
+    realms []server.RealmInfo
+}
+
+func (m *MockConfig) Realms(defaultValue []server.RealmInfo) ([]server.RealmInfo, bool) {
+    if m.realms != nil {
+        return m.realms, true
+    }
+    return defaultValue, false
+}
+
+func (m *MockConfig) Host(defaultValue string) (string, bool) {
+    return "localhost", true
+}
+
+func (m *MockConfig) Port(defaultValue int) (int, bool) {
+    return 8080, true
+}
+```
+
 ## Преимущества
 
 ✅ **Go-way** - интерфейсы + code generation  
@@ -362,4 +655,6 @@ go build -o bbin-app ./cmd/Bbin
 ✅ **Автоматическая установка** - через `go install`  
 ✅ **Интеграция с go generate** - стандартный Go инструмент  
 ✅ **Глобальный реестр** - централизованное управление конфигурациями через `GlobalConfig`  
-✅ **Явная проверка наличия** - методы возвращают `(value, exists bool)` для контроля источников
+✅ **Явная проверка наличия** - методы возвращают `(value, exists bool)` для контроля источников  
+✅ **Поддержка массивов структур** - автоматическая сериализация/десериализация сложных типов  
+✅ **Автоматические импорты** - генератор добавляет необходимые импорты при использовании кастомных типов

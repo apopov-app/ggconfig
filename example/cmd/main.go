@@ -21,11 +21,11 @@ func main() {
 	if *configPath != "" {
 		// Option 1: YAML configuration
 		log.Println("\n=== Using YAML Configuration ===")
-		cfg = db.NewDbConfigYAMLConfig(*configPath)
+		cfg = db.NewInternalDbConfigYAMLConfig(*configPath)
 	} else {
 		// Option 2: ENV configuration (default)
 		log.Println("\n=== Using ENV Configuration ===")
-		cfg = db.NewDbConfigEnvConfig()
+		cfg = db.NewInternalDbConfigEnvConfig()
 	}
 
 	// Package handles defaults internally

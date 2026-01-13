@@ -87,4 +87,26 @@ func (y *YAML) GetInt(section string, keys ...string) (int, bool) {
 	return 0, false
 }
 
+// GetSlice retrieves a slice value from YAML for a given section and keys.
+// It returns the slice as []any and a boolean indicating success.
+// This is a generic method that can be used for any slice type.
+func (y *YAML) GetSlice(section string, keys ...string) ([]any, bool) {
+	y.ensure()
+	sec, ok := y.root[section].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	for _, k := range keys {
+		if k == "" {
+			continue
+		}
+		if v, ok := sec[k]; ok {
+			if slice, ok := v.([]any); ok {
+				return slice, true
+			}
+		}
+	}
+	return nil, false
+}
+
 

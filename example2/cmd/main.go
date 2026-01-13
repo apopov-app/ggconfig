@@ -30,12 +30,12 @@ func main() {
 
 	// Get configurations from registry
 	// Each package registered with --registry gets a Get<Pkg>() method on GlobalConfig
-	dbCfg, ok := global.GetDatabase()
+	dbCfg, ok := global.GetInternalDatabase()
 	if !ok {
 		log.Fatal("database config not registered")
 	}
 
-	serverCfg, ok := global.GetServer()
+	serverCfg, ok := global.GetInternalServer()
 	if !ok {
 		log.Fatal("server config not registered")
 	}
