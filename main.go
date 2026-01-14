@@ -968,8 +968,8 @@ func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{qualifyType
 	{{- $qualifiedElemType := qualifyType (baseType .ReturnType) $.NeedImport $.SourcePackageName -}}
 	{{- if isSlice . }}
 	// Алиасные секции
-	{{- range yamlSectionAliases }}
-	{{- $section := . -}}
+	{{ range yamlSectionAliases }}
+	{{ $section := . }}
 	if v, ok := c.y.GetSlice("{{$section}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		var result {{$qualifiedReturnType}}
 		for _, item := range v {
@@ -1005,8 +1005,8 @@ func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{qualifyType
 	return defaultValue, false
 	{{- else if eq .ReturnType "int" }}
 	// Алиасные секции
-	{{- range yamlSectionAliases }}
-	{{- $section := . -}}
+	{{ range yamlSectionAliases }}
+	{{ $section := . }}
 	if v, ok := c.y.GetInt("{{$section}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
 		}
@@ -1018,8 +1018,8 @@ func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{qualifyType
 	return defaultValue, false
 	{{- else }}
 	// Алиасные секции
-	{{- range yamlSectionAliases }}
-	{{- $section := . -}}
+	{{ range yamlSectionAliases }}
+	{{ $section := . }}
 	if v, ok := c.y.GetString("{{$section}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
 	}
