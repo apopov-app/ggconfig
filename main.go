@@ -13,6 +13,8 @@ import (
 	"text/template"
 )
 
+const version = "1.0.2"
+
 type Method struct {
 	Name       string
 	ParamType  string
@@ -23,12 +25,12 @@ type Method struct {
 }
 
 type InterfaceInfo struct {
-	PackageName       string   // Оригинальное имя пакета (для обратной совместимости)
-	UniquePackageName string   // Уникальное имя на основе пути
+	PackageName       string // Оригинальное имя пакета (для обратной совместимости)
+	UniquePackageName string // Уникальное имя на основе пути
 	InterfaceName     string
 	Methods           []Method
-	ImportPath        string   // Путь для импорта пакета (если генерация в другой пакет)
-	NeedImport        bool     // Нужен ли импорт оригинального пакета
+	ImportPath        string // Путь для импорта пакета (если генерация в другой пакет)
+	NeedImport        bool   // Нужен ли импорт оригинального пакета
 }
 
 // Настройки алиасов, передаваемые через --alias
@@ -59,9 +61,34 @@ func main() {
 	examplePath := flag.String("example", "", "generate example config file")
 	registryEnabled := flag.Bool("registry", false, "enable global registry: generates registry.gen.go in output package and init() self-registration in each generated file")
 	packageNameOverride := flag.String("name", "", "override package name for generation (default: auto-detect from path)")
+	showVersion := flag.Bool("version", false, "show version information")
 	var aliasFlags aliasFlag
 	flag.Var(&aliasFlags, "alias", "alias mapping: env.<Method>=ALIAS1,ALIAS2 | yaml.section=ALIAS1,ALIAS2 | yaml.key.<Method>=ALIAS1,ALIAS2")
 	flag.Parse()
+
+	// Show version and info if no arguments or --version flag
+	if *showVersion || (flag.NFlag() == 0 && len(os.Args) == 1) {
+		fmt.Printf("ggconfig v%s - Go Configuration Generator\n", version)
+		fmt.Println("\nA Go-way configuration generator that creates type-safe config implementations")
+		fmt.Println("from interface definitions.")
+		fmt.Println("\nFeatures:")
+		fmt.Println("  • Interface-based configuration (ENV, YAML, Mock)")
+		fmt.Println("  • Support for slice types (arrays of structs)")
+		fmt.Println("  • Global registry with centralized config management")
+		fmt.Println("  • Automatic import generation for custom types")
+		fmt.Println("  • Alias support for ENV and YAML keys")
+		fmt.Println("\nUsage:")
+		fmt.Println("  ggconfig --interface=Config [options]")
+		fmt.Println("\nOptions:")
+		flag.PrintDefaults()
+		fmt.Println("\nExamples:")
+		fmt.Println("  ggconfig --interface=Config")
+		fmt.Println("  ggconfig --interface=Config --output=internal/gconfig --registry")
+		fmt.Println("  ggconfig --interface=Config --alias yaml.section=jwt")
+		fmt.Println("\nDocumentation:")
+		fmt.Println("  https://github.com/apopov-app/ggconfig")
+		return
+	}
 
 	// Автоматически определяем пакет из текущей директории
 	currentDir, err := os.Getwd()
@@ -133,7 +160,7 @@ func main() {
 				}
 			}
 		}
-		
+
 		if hasCustomTypes {
 			// Генерация в другой пакет - нужен импорт
 			info.NeedImport = true
@@ -269,7 +296,7 @@ func getModuleName(moduleRoot string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -567,8 +594,8 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 				return typeName
 			}
 			// Проверяем, является ли тип примитивным
-			if typeName == "string" || typeName == "int" || typeName == "bool" || 
-			   typeName == "int64" || typeName == "float64" {
+			if typeName == "string" || typeName == "int" || typeName == "bool" ||
+				typeName == "int64" || typeName == "float64" {
 				return typeName
 			}
 			// Если это слайс, обрабатываем элемент
