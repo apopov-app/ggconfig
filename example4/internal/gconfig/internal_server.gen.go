@@ -18,7 +18,7 @@ type internal_serverEnvConfig struct{
 
 
 func (c *internal_serverEnvConfig) Realms(defaultValue []server.RealmInfo) ([]server.RealmInfo, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_SERVER_REALMS")); value != "" {
+	if value := os.Getenv(c.mapKey("SERVER_REALMS")); value != "" {
 		var result []server.RealmInfo
 		if err := json.Unmarshal([]byte(value), &result); err == nil {
 			return result, true
@@ -28,14 +28,14 @@ func (c *internal_serverEnvConfig) Realms(defaultValue []server.RealmInfo) ([]se
 }
 
 func (c *internal_serverEnvConfig) Host(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_SERVER_HOST")); value != "" {
+	if value := os.Getenv(c.mapKey("SERVER_HOST")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_serverEnvConfig) Port(defaultValue int) (int, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_SERVER_PORT")); value != "" {
+	if value := os.Getenv(c.mapKey("SERVER_PORT")); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue, true
 		}
@@ -85,8 +85,9 @@ func (c *internal_serverYAMLConfig) Err() error { return c.err }
 
 func (c *internal_serverYAMLConfig) Realms(defaultValue []server.RealmInfo) ([]server.RealmInfo, bool) {
 	// Алиасные секции
-	// Основная секция internal_server
-	if v, ok := c.y.GetSlice("internal_server", "realms"); ok {
+	
+	// Основная секция server
+	if v, ok := c.y.GetSlice("server", "realms"); ok {
 		var result []server.RealmInfo
 		for _, item := range v {
 			if m, ok := item.(map[string]any); ok {
@@ -106,8 +107,9 @@ func (c *internal_serverYAMLConfig) Realms(defaultValue []server.RealmInfo) ([]s
 
 func (c *internal_serverYAMLConfig) Host(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_server
-	if v, ok := c.y.GetString("internal_server", "host"); ok {
+	
+	// Основная секция server
+	if v, ok := c.y.GetString("server", "host"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -115,8 +117,9 @@ func (c *internal_serverYAMLConfig) Host(defaultValue string) (string, bool) {
 
 func (c *internal_serverYAMLConfig) Port(defaultValue int) (int, bool) {
 	// Алиасные секции
-	// Основная секция internal_server
-	if v, ok := c.y.GetInt("internal_server", "port"); ok {
+	
+	// Основная секция server
+	if v, ok := c.y.GetInt("server", "port"); ok {
 		return v, true
 	}
 	return defaultValue, false

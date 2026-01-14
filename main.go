@@ -531,7 +531,7 @@ func generateImplementation(info *InterfaceInfo, aliases AliasSettings, outputPa
 			}
 			return result.String()
 		},
-		"envKey": func(methodName string) string { return getEnvKey(info.UniquePackageName, methodName) },
+		"envKey": func(methodName string) string { return getEnvKey(info.PackageName, methodName) },
 		// Проверка ENV по ключу без возврата default
 		"envCheck": func(returnType, key string) string { return getEnvCheckSnippet(key, returnType) },
 		// Возврат ENV по основному ключу с fallback на default
@@ -814,7 +814,7 @@ func generateExampleConfig(info *InterfaceInfo, examplePath string) error {
 			}
 			return result.String()
 		},
-		"envKey": func(methodName string) string { return getEnvKey(info.UniquePackageName, methodName) },
+		"envKey": func(methodName string) string { return getEnvKey(info.PackageName, methodName) },
 		"defaultValue": func(paramType string) string {
 			switch paramType {
 			case "string":
@@ -986,8 +986,8 @@ func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{qualifyType
 		}
 	}
 	{{- end}}
-	// Основная секция {{$.UniquePackageName}}
-	if v, ok := c.y.GetSlice("{{$.UniquePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
+	// Основная секция {{$.SourcePackageName}}
+	if v, ok := c.y.GetSlice("{{$.SourcePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		var result {{$qualifiedReturnType}}
 		for _, item := range v {
 			if m, ok := item.(map[string]any); ok {
@@ -1011,8 +1011,8 @@ func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{qualifyType
 		return v, true
 		}
 		{{- end}}
-	// Основная секция {{$.UniquePackageName}}
-	if v, ok := c.y.GetInt("{{$.UniquePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
+	// Основная секция {{$.SourcePackageName}}
+	if v, ok := c.y.GetInt("{{$.SourcePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
 	}
 	return defaultValue, false
@@ -1024,8 +1024,8 @@ func (c *{{$.UniquePackageName}}YAMLConfig) {{.Name}}(defaultValue {{qualifyType
 		return v, true
 	}
 	{{- end}}
-	// Основная секция {{$.UniquePackageName}}
-	if v, ok := c.y.GetString("{{$.UniquePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
+	// Основная секция {{$.SourcePackageName}}
+	if v, ok := c.y.GetString("{{$.SourcePackageName}}", {{- range yamlKeyAliases $methodName }}"{{.}}",{{- end}} "{{$keyPrimary}}"); ok {
 		return v, true
 		}
 	return defaultValue, false

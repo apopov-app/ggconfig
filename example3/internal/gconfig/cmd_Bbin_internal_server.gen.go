@@ -18,7 +18,7 @@ type cmd_Bbin_internal_serverEnvConfig struct{
 
 
 func (c *cmd_Bbin_internal_serverEnvConfig) Port(defaultValue int) (int, bool) {
-	if value := os.Getenv(c.mapKey("CMD_BBIN_INTERNAL_SERVER_PORT")); value != "" {
+	if value := os.Getenv(c.mapKey("SERVER_PORT")); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue, true
 		}
@@ -27,7 +27,7 @@ func (c *cmd_Bbin_internal_serverEnvConfig) Port(defaultValue int) (int, bool) {
 }
 
 func (c *cmd_Bbin_internal_serverEnvConfig) Host(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("CMD_BBIN_INTERNAL_SERVER_HOST")); value != "" {
+	if value := os.Getenv(c.mapKey("SERVER_HOST")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
@@ -75,8 +75,9 @@ func (c *cmd_Bbin_internal_serverYAMLConfig) Err() error { return c.err }
 
 func (c *cmd_Bbin_internal_serverYAMLConfig) Port(defaultValue int) (int, bool) {
 	// Алиасные секции
-	// Основная секция cmd_Bbin_internal_server
-	if v, ok := c.y.GetInt("cmd_Bbin_internal_server", "port"); ok {
+	
+	// Основная секция server
+	if v, ok := c.y.GetInt("server", "port"); ok {
 		return v, true
 	}
 	return defaultValue, false
@@ -84,8 +85,9 @@ func (c *cmd_Bbin_internal_serverYAMLConfig) Port(defaultValue int) (int, bool) 
 
 func (c *cmd_Bbin_internal_serverYAMLConfig) Host(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция cmd_Bbin_internal_server
-	if v, ok := c.y.GetString("cmd_Bbin_internal_server", "host"); ok {
+	
+	// Основная секция server
+	if v, ok := c.y.GetString("server", "host"); ok {
 		return v, true
 		}
 	return defaultValue, false

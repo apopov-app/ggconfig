@@ -18,42 +18,42 @@ type internal_dbEnvConfig struct{
 
 
 func (c *internal_dbEnvConfig) Host(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DB_HOST")); value != "" {
+	if value := os.Getenv(c.mapKey("DB_HOST")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_dbEnvConfig) Port(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DB_PORT")); value != "" {
+	if value := os.Getenv(c.mapKey("DB_PORT")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_dbEnvConfig) User(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DB_USER")); value != "" {
+	if value := os.Getenv(c.mapKey("DB_USER")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_dbEnvConfig) Password(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DB_PASSWORD")); value != "" {
+	if value := os.Getenv(c.mapKey("DB_PASSWORD")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_dbEnvConfig) Name(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DB_NAME")); value != "" {
+	if value := os.Getenv(c.mapKey("DB_NAME")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_dbEnvConfig) SSLMode(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DB_SSL_MODE")); value != "" {
+	if value := os.Getenv(c.mapKey("DB_SSL_MODE")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
@@ -101,8 +101,9 @@ func (c *internal_dbYAMLConfig) Err() error { return c.err }
 
 func (c *internal_dbYAMLConfig) Host(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_db
-	if v, ok := c.y.GetString("internal_db", "host"); ok {
+	
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "host"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -110,8 +111,9 @@ func (c *internal_dbYAMLConfig) Host(defaultValue string) (string, bool) {
 
 func (c *internal_dbYAMLConfig) Port(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_db
-	if v, ok := c.y.GetString("internal_db", "port"); ok {
+	
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "port"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -119,8 +121,9 @@ func (c *internal_dbYAMLConfig) Port(defaultValue string) (string, bool) {
 
 func (c *internal_dbYAMLConfig) User(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_db
-	if v, ok := c.y.GetString("internal_db", "user"); ok {
+	
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "user"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -128,8 +131,9 @@ func (c *internal_dbYAMLConfig) User(defaultValue string) (string, bool) {
 
 func (c *internal_dbYAMLConfig) Password(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_db
-	if v, ok := c.y.GetString("internal_db", "password"); ok {
+	
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "password"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -137,8 +141,9 @@ func (c *internal_dbYAMLConfig) Password(defaultValue string) (string, bool) {
 
 func (c *internal_dbYAMLConfig) Name(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_db
-	if v, ok := c.y.GetString("internal_db", "name"); ok {
+	
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "name"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -146,8 +151,9 @@ func (c *internal_dbYAMLConfig) Name(defaultValue string) (string, bool) {
 
 func (c *internal_dbYAMLConfig) SSLMode(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_db
-	if v, ok := c.y.GetString("internal_db", "sslmode"); ok {
+	
+	// Основная секция db
+	if v, ok := c.y.GetString("db", "sslmode"); ok {
 		return v, true
 		}
 	return defaultValue, false

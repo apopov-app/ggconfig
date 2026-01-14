@@ -18,42 +18,42 @@ type internal_databaseEnvConfig struct{
 
 
 func (c *internal_databaseEnvConfig) Host(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DATABASE_HOST")); value != "" {
+	if value := os.Getenv(c.mapKey("DATABASE_HOST")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_databaseEnvConfig) Port(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DATABASE_PORT")); value != "" {
+	if value := os.Getenv(c.mapKey("DATABASE_PORT")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_databaseEnvConfig) User(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DATABASE_USER")); value != "" {
+	if value := os.Getenv(c.mapKey("DATABASE_USER")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_databaseEnvConfig) Password(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DATABASE_PASSWORD")); value != "" {
+	if value := os.Getenv(c.mapKey("DATABASE_PASSWORD")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_databaseEnvConfig) Name(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DATABASE_NAME")); value != "" {
+	if value := os.Getenv(c.mapKey("DATABASE_NAME")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
 }
 
 func (c *internal_databaseEnvConfig) SSLMode(defaultValue string) (string, bool) {
-	if value := os.Getenv(c.mapKey("INTERNAL_DATABASE_SSL_MODE")); value != "" {
+	if value := os.Getenv(c.mapKey("DATABASE_SSL_MODE")); value != "" {
 		return value, true
 	}
 	return defaultValue, false
@@ -101,8 +101,9 @@ func (c *internal_databaseYAMLConfig) Err() error { return c.err }
 
 func (c *internal_databaseYAMLConfig) Host(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_database
-	if v, ok := c.y.GetString("internal_database", "host"); ok {
+	
+	// Основная секция database
+	if v, ok := c.y.GetString("database", "host"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -110,8 +111,9 @@ func (c *internal_databaseYAMLConfig) Host(defaultValue string) (string, bool) {
 
 func (c *internal_databaseYAMLConfig) Port(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_database
-	if v, ok := c.y.GetString("internal_database", "port"); ok {
+	
+	// Основная секция database
+	if v, ok := c.y.GetString("database", "port"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -119,8 +121,9 @@ func (c *internal_databaseYAMLConfig) Port(defaultValue string) (string, bool) {
 
 func (c *internal_databaseYAMLConfig) User(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_database
-	if v, ok := c.y.GetString("internal_database", "user"); ok {
+	
+	// Основная секция database
+	if v, ok := c.y.GetString("database", "user"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -128,8 +131,9 @@ func (c *internal_databaseYAMLConfig) User(defaultValue string) (string, bool) {
 
 func (c *internal_databaseYAMLConfig) Password(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_database
-	if v, ok := c.y.GetString("internal_database", "password"); ok {
+	
+	// Основная секция database
+	if v, ok := c.y.GetString("database", "password"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -137,8 +141,9 @@ func (c *internal_databaseYAMLConfig) Password(defaultValue string) (string, boo
 
 func (c *internal_databaseYAMLConfig) Name(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_database
-	if v, ok := c.y.GetString("internal_database", "name"); ok {
+	
+	// Основная секция database
+	if v, ok := c.y.GetString("database", "name"); ok {
 		return v, true
 		}
 	return defaultValue, false
@@ -146,8 +151,9 @@ func (c *internal_databaseYAMLConfig) Name(defaultValue string) (string, bool) {
 
 func (c *internal_databaseYAMLConfig) SSLMode(defaultValue string) (string, bool) {
 	// Алиасные секции
-	// Основная секция internal_database
-	if v, ok := c.y.GetString("internal_database", "sslmode"); ok {
+	
+	// Основная секция database
+	if v, ok := c.y.GetString("database", "sslmode"); ok {
 		return v, true
 		}
 	return defaultValue, false
