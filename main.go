@@ -13,7 +13,7 @@ import (
 	"text/template"
 )
 
-const version = "1.0.2"
+const version = "1.0.3"
 
 type Method struct {
 	Name       string
